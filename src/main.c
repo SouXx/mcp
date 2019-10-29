@@ -5,14 +5,13 @@
 #include "main.h"
 #include "../tivaware/driverlib/interrupt.h"
 #include "../tivaware/driverlib/gpio.h"
-#include "../tivaware/driverlib/hw_memmap.h"
-#include "../tivaware/driverlib/hw_types.h"
 #include "../tivaware/driverlib/pin_map.h"
 #include "../tivaware/driverlib/rom.h"
 #include "../tivaware/driverlib/sysctl.c"
 #include "../tivaware/driverlib/uart.h"
-#include "../tivaware/driverlib/uartstdio.h"
 #include <stdio.h>
+#include <tclDecls.h>
+#include <sysctl.h>
 
 #define OUTPUT_L            GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4
 #define OUTPUT_M            GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7
@@ -25,6 +24,7 @@
 #define FRAME_COLOR         0xFF
 
 void wait(void) {
+    // TODO: refactor implementation
     volatile int tmp;
     for (tmp = 0; tmp < 10000; tmp++);
 }
@@ -125,31 +125,35 @@ void initialise_ssd1963(void) {
     write_command(0x29);
 }
 
-void window_set(unsigned int start_x, unsigned int end_x, unsigned int start_y,
-                unsigned int end_y) {
+void window_set(struct frame_t frame) {
 
     write_command(0x2A);
-    write_data((start_x >> 8));
-    write_data(start_x);
-    write_data((end_x >> 8));
-    write_data(end_x);
+    write_data((frame.start_x >> 8));
+    write_data(frame.start_x);
+    write_data((frame.end_x >> 8));
+    write_data(frame.end_x);
 
     write_command(0x2B);
-    write_data((start_y >> 8));
-    write_data(start_y);
-    write_data((end_y >> 8));
-    write_data(end_y);
+    write_data((frame.start_y >> 8));
+    write_data(frame.start_y);
+    write_data((frame.end_y >> 8));
+    write_data(frame.end_y);
 }
 
 void draw_pixel(unsigned int curr_x, unsigned int curr_y, unsigned char color) {
-    window_set(curr_x, curr_x, curr_y, curr_y);
+    struct frame_t frame;
+    frame.end_y = curr_y;
+    frame.start_y = curr_y;
+    frame.start_x = curr_x;
+    frame.end_x = curr_x;
+    window_set(frame);
     write_command(0x2C);
     write_data(color);
     write_data(color);
     write_data(color);
 }
 
-void draw(unsigned int delta_x, unsigned int delta_y, unsigned char color) {
+void draw_rectangle(unsigned int delta_x, unsigned int delta_y, unsigned char color) {
 
     write_command(0x2C);
     unsigned int y = 0;
@@ -163,36 +167,32 @@ void draw(unsigned int delta_x, unsigned int delta_y, unsigned char color) {
     }
 }
 
-void write_frame(void) {
-    unsigned int start_x = 0;
-    unsigned int end_x = 479;
-    unsigned int start_y = 68;
-    unsigned int end_y = 70;
+void write_frame(struct frame_t frame) {
+    frame.start_x = 0;
+    frame.start_x = 479;
+    frame.start_x = 68;
+    frame.start_x = 70;
 
-    window_set(start_x, end_x, start_y, end_y);
-    draw((end_x - start_x), (end_y - start_y), FRAME_COLOR);
+    window_set(frame);
+    draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y), FRAME_COLOR);
 
-    start_x = 400;
-    end_x = 402;
-    start_y = 70;
-    end_y = 271;
+    frame.start_x = 400;
+    frame.end_x = 402;
+    frame.start_y = 70;
+    frame.end_y = 271;
 
-    window_set(start_x, end_x, start_y, end_y);
-    draw((end_x - start_x), (end_y - start_y), FRAME_COLOR);
+    window_set(frame);
+    draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y), FRAME_COLOR);
 }
 
-void clear_display(void) {
-    unsigned int start_x = 0;
-    unsigned int end_x = 479;
-    unsigned int start_y = 0;
-    unsigned int end_y = 271;
+void clear_display(struct frame_t frame) {
 
-    window_set(start_x, end_x, start_y, end_y);
-    draw((end_x - start_x), (end_y - start_y), BACKGROUND_COLOR);
+    window_set(frame);
+    draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y), BACKGROUND_COLOR);
 
 }
 
-void raster_circle(int x0, int y0, int radius) {
+void write_circle(int x0, int y0, int radius) {
     int f = 1 - radius;
     int ddF_x = 0;
     int ddF_y = -2 * radius;
@@ -214,7 +214,7 @@ void raster_circle(int x0, int y0, int radius) {
         ddF_x += 2;
         f += ddF_x + 1;
 
-        draw_pixel((x0 - x), (y0 + y), FRAME_COLOR);
+        draw_pixel(x0 - x, y0 + y, FRAME_COLOR);
         draw_pixel(x0 - x, y0 + y, FRAME_COLOR);
         draw_pixel(x0 + x, y0 - y, FRAME_COLOR);
         draw_pixel(x0 - x, y0 - y, FRAME_COLOR);
@@ -225,6 +225,14 @@ void raster_circle(int x0, int y0, int radius) {
     }
 }
 
+static struct frame_t get_frame(unsigned int start_x, unsigned int end_x, unsigned int start_y, unsigned int end_y) {
+    struct frame_t frame;
+    frame.start_x = start_x;
+    frame.end_x = end_x;
+    frame.start_y = start_y;
+    frame.end_y = end_y;
+    return frame;
+}
 
 //#############################################################################
 // main
@@ -238,14 +246,18 @@ int main(void) {
     //Set direction
     GPIOPinTypeGPIOOutput(GPIO_PORTL_BASE, OUTPUT_L);
     GPIOPinTypeGPIOOutput(GPIO_PORTM_BASE, OUTPUT_M);
-
     initialise_ssd1963();
-    clear_display();
-    write_frame();
-    window_set(0, 400, 70, 270);
-    raster_circle(200, 271, 200);
-    raster_circle(200, 271, 199);
+
+    struct frame_t frame;
+    frame = get_frame(0, 479, 0, 271);
+    clear_display(frame);
+    write_frame(frame);
+    frame = get_frame(0, 400, 70, 270);
+    window_set(frame);
+    write_circle(200, 271, 200);
+    write_circle(200, 271, 199);
     while (1) {
 
     }
 }
+
