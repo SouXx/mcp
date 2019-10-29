@@ -14,20 +14,19 @@
 #include "../tivaware/driverlib/uartstdio.h"
 #include <stdio.h>
 
-#define OUTPUT_L  			GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4
-#define OUTPUT_M  			GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7
-#define WR	    			GPIO_PIN_1	 // write state
-#define CS      			GPIO_PIN_3	 // chip select
-#define RS					GPIO_PIN_2   //mode select (command/data)
-#define SELECT_AND_WRITE 	(CS | WR)
-#define RST    				GPIO_PIN_4
-#define BACKGROUND_COLOR	0x00
-#define FRAME_COLOR			0xFF
+#define OUTPUT_L            GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4
+#define OUTPUT_M            GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7
+#define WR                  GPIO_PIN_1     // write state
+#define CS                  GPIO_PIN_3     // chip select
+#define RS                  GPIO_PIN_2   //mode select (command/data)
+#define SELECT_AND_WRITE    (CS | WR)
+#define RST                 GPIO_PIN_4
+#define BACKGROUND_COLOR    0x00
+#define FRAME_COLOR         0xFF
 
 void wait(void) {
     volatile int tmp;
-    for (tmp = 0; tmp < 10000; tmp++)
-        ;
+    for (tmp = 0; tmp < 10000; tmp++);
 }
 
 void write_command(unsigned char command) {
@@ -142,13 +141,14 @@ void window_set(unsigned int start_x, unsigned int end_x, unsigned int start_y,
     write_data(end_y);
 }
 
-void draw_pixel(unsigned int curr_x, unsigned int curr_y, unsigned char color){
+void draw_pixel(unsigned int curr_x, unsigned int curr_y, unsigned char color) {
     window_set(curr_x, curr_x, curr_y, curr_y);
     write_command(0x2C);
     write_data(color);
     write_data(color);
     write_data(color);
 }
+
 void draw(unsigned int delta_x, unsigned int delta_y, unsigned char color) {
 
     write_command(0x2C);
@@ -162,6 +162,7 @@ void draw(unsigned int delta_x, unsigned int delta_y, unsigned char color) {
         }
     }
 }
+
 void write_frame(void) {
     unsigned int start_x = 0;
     unsigned int end_x = 479;
@@ -179,6 +180,7 @@ void write_frame(void) {
     window_set(start_x, end_x, start_y, end_y);
     draw((end_x - start_x), (end_y - start_y), FRAME_COLOR);
 }
+
 void clear_display(void) {
     unsigned int start_x = 0;
     unsigned int end_x = 479;
@@ -190,8 +192,7 @@ void clear_display(void) {
 
 }
 
-void raster_circle(int x0, int y0, int radius)
-{
+void raster_circle(int x0, int y0, int radius) {
     int f = 1 - radius;
     int ddF_x = 0;
     int ddF_y = -2 * radius;
@@ -203,10 +204,8 @@ void raster_circle(int x0, int y0, int radius)
     draw_pixel(x0 + radius, y0, FRAME_COLOR);
     draw_pixel(x0 - radius, y0, FRAME_COLOR);
 
-    while(x < y)
-    {
-        if(f >= 0)
-        {
+    while (x < y) {
+        if (f >= 0) {
             y--;
             ddF_y += 2;
             f += ddF_y;
@@ -228,9 +227,8 @@ void raster_circle(int x0, int y0, int radius)
 
 
 //#############################################################################
-
+// main
 int main(void) {
-
     SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_OSC | SYSCTL_OSC_MAIN |
                    SYSCTL_XTAL_16MHZ);
 
