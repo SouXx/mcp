@@ -3,15 +3,16 @@
 //
 
 #include "main.h"
+#include <stdio.h>
+#include <tclDecls.h>
+#include <sysctl.h>
 #include "../tivaware/driverlib/interrupt.h"
 #include "../tivaware/driverlib/gpio.h"
 #include "../tivaware/driverlib/pin_map.h"
 #include "../tivaware/driverlib/rom.h"
 #include "../tivaware/driverlib/sysctl.c"
 #include "../tivaware/driverlib/uart.h"
-#include <stdio.h>
-#include <tclDecls.h>
-#include <sysctl.h>
+#include "../tivaware/inc/hw_memmap.h"
 
 
 //#############################################################################
@@ -20,11 +21,11 @@
 
 #define OUTPUT_L            GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4
 #define OUTPUT_M            GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7
-#define WR                  GPIO_PIN_1     // write state
-#define CS                  GPIO_PIN_3     // chip select
-#define RS                  GPIO_PIN_2   //mode select (command/data)
-#define SELECT_AND_WRITE    (CS | WR)
-#define RST                 GPIO_PIN_4
+#define DISPLAY_WR          GPIO_PIN_1      // write state
+#define DISPLAY_CS          GPIO_PIN_3      // chip select
+#define DISPLAY_RS          GPIO_PIN_2      // mode select (command/data)
+#define DISPLAY_RST         GPIO_PIN_4
+#define SELECT_AND_WRITE    (DISPLAY_CS | DISPLAY_WR)
 #define BACKGROUND_COLOR    0x00
 #define FRAME_COLOR         0xFF
 
@@ -41,15 +42,15 @@ void write_command(unsigned char command) {
     GPIOPinWrite(GPIO_PORTL_BASE, OUTPUT_L, 0x1F);
 
     // Cs = 0  --> Chip select signal
-    // RS = 0  --> Command mode
-    // WR = 0  --> write enable
-    GPIOPinWrite(GPIO_PORTL_BASE, (SELECT_AND_WRITE | RS), 0x00);
+    // DISPLAY_RS = 0  --> Command mode
+    // DISPLAY_WR = 0  --> write enable
+    GPIOPinWrite(GPIO_PORTL_BASE, (SELECT_AND_WRITE | DISPLAY_RS), 0x00);
 
     //Port M Ausgabe von Command (var)
     GPIOPinWrite(GPIO_PORTM_BASE, OUTPUT_M, command);
 
-    // WR = 1  --> write disable
-    // CS = 1  --> no Chip select signal
+    // DISPLAY_WR = 1  --> write disable
+    // DISPLAY_CS = 1  --> no Chip select signal
     GPIOPinWrite(GPIO_PORTL_BASE, SELECT_AND_WRITE, 0xFF); // 0xFF represents logical 1 on all pins
 
 }
@@ -63,16 +64,16 @@ void write_data(unsigned char data) {
     GPIOPinWrite(GPIO_PORTL_BASE, OUTPUT_L, 0x1F);
 
     // Cs = 0  --> Chip select signal
-    // RS = 1  --> Command mode
-    // WR = 0  --> write enable
+    // DISPLAY_RS = 1  --> Command mode
+    // DISPLAY_WR = 0  --> write enable
     GPIOPinWrite(GPIO_PORTL_BASE, SELECT_AND_WRITE, 0x00);
-    GPIOPinWrite(GPIO_PORTL_BASE, RS, 0xFF);
+    GPIOPinWrite(GPIO_PORTL_BASE, DISPLAY_RS, 0xFF);
 
     //Port M Ausgabe von data (var)
     GPIOPinWrite(GPIO_PORTM_BASE, OUTPUT_M, data);
 
-    // WR = 1  --> write disable
-    // CS = 1  --> no Chip select signal
+    // DISPLAY_WR = 1  --> write disable
+    // DISPLAY_CS = 1  --> no Chip select signal
     GPIOPinWrite(GPIO_PORTL_BASE, SELECT_AND_WRITE, 0xFF);
 
 }
@@ -81,7 +82,7 @@ void write_data(unsigned char data) {
  * Initialise
  */
 void initialise_ssd1963(void) {
-    GPIOPinWrite(GPIO_PORTL_BASE, RST, 0x00);
+    GPIOPinWrite(GPIO_PORTL_BASE, DISPLAY_RST, 0x00);
     wait();
     write_command(0x01);
     wait();
@@ -253,7 +254,7 @@ void write_frame(void) {
 }
 
 /**
- * clears display is the given frame
+ * clears display within the given frame
  * @param frame
  */
 void clear_display(struct frame_t frame) {
@@ -326,8 +327,9 @@ int main(void) {
     window_set(tacho_frame);
     draw_circle(200, 271, 200);
     draw_circle(200, 271, 199);
-    while (1) {
 
+    while (1) {
+        // IDLE
     }
 }
 
