@@ -14,11 +14,11 @@ struct frame_t {
 };
 
 
-void write_circle(int x0, int y0, int radius);
-
 void clear_display(struct frame_t frame);
 
-void write_frame(struct frame_t frame);
+void write_frame(void);
+
+void draw_circle(int x0, int y0, int radius);
 
 void draw_rectangle(unsigned int delta_x, unsigned int delta_y, unsigned char color);
 

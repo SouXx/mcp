@@ -13,6 +13,11 @@
 #include <tclDecls.h>
 #include <sysctl.h>
 
+
+//#############################################################################
+// Defines
+//#############################################################################
+
 #define OUTPUT_L            GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4
 #define OUTPUT_M            GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7
 #define WR                  GPIO_PIN_1     // write state
@@ -23,12 +28,14 @@
 #define BACKGROUND_COLOR    0x00
 #define FRAME_COLOR         0xFF
 
-void wait(void) {
-    // TODO: refactor implementation
-    volatile int tmp;
-    for (tmp = 0; tmp < 10000; tmp++);
-}
+//#############################################################################
+// Display utilities
+//#############################################################################
 
+/**
+ * writes command to display
+ * @param command as hex value
+ */
 void write_command(unsigned char command) {
     //Ausgang von gesamt Port L wird auf 0x1F gesetzt,
     GPIOPinWrite(GPIO_PORTL_BASE, OUTPUT_L, 0x1F);
@@ -47,6 +54,10 @@ void write_command(unsigned char command) {
 
 }
 
+/**
+ * write data to display
+ * @param data as hex value
+ */
 void write_data(unsigned char data) {
     //Ausgang von gesamt Port L wird auf 0x1F gesetzt,
     GPIOPinWrite(GPIO_PORTL_BASE, OUTPUT_L, 0x1F);
@@ -66,6 +77,9 @@ void write_data(unsigned char data) {
 
 }
 
+/**
+ * Initialise
+ */
 void initialise_ssd1963(void) {
     GPIOPinWrite(GPIO_PORTL_BASE, RST, 0x00);
     wait();
@@ -125,6 +139,43 @@ void initialise_ssd1963(void) {
     write_command(0x29);
 }
 
+//#############################################################################
+// Helper functions
+//#############################################################################
+
+/**
+ * helper class, returns full initilized struct
+ * @param start_x
+ * @param end_x
+ * @param start_y
+ * @param end_y
+ * @return struct frame_t
+ */
+static struct frame_t get_frame(unsigned int start_x, unsigned int end_x, unsigned int start_y, unsigned int end_y) {
+    struct frame_t frame;
+    frame.start_x = start_x;
+    frame.end_x = end_x;
+    frame.start_y = start_y;
+    frame.end_y = end_y;
+    return frame;
+}
+
+void wait(void) {
+    // TODO: refactor implementation
+    volatile int tmp;
+    for (tmp = 0; tmp < 10000; tmp++);
+}
+
+//#############################################################################
+// Drawing functions
+//#############################################################################
+
+/**
+ * set window to draw in
+ * need to be set before
+ * drawing something
+ * @param frame size of window
+ */
 void window_set(struct frame_t frame) {
 
     write_command(0x2A);
@@ -140,6 +191,12 @@ void window_set(struct frame_t frame) {
     write_data(frame.end_y);
 }
 
+/**
+ * draws a single pixel
+ * @param curr_x x coordinate
+ * @param curr_y y coordinate
+ * @param color of the pixel
+ */
 void draw_pixel(unsigned int curr_x, unsigned int curr_y, unsigned char color) {
     struct frame_t frame;
     frame.end_y = curr_y;
@@ -153,6 +210,12 @@ void draw_pixel(unsigned int curr_x, unsigned int curr_y, unsigned char color) {
     write_data(color);
 }
 
+/**
+ * draws a rectangle
+ * @param delta_x
+ * @param delta_y
+ * @param color
+ */
 void draw_rectangle(unsigned int delta_x, unsigned int delta_y, unsigned char color) {
 
     write_command(0x2C);
@@ -167,7 +230,11 @@ void draw_rectangle(unsigned int delta_x, unsigned int delta_y, unsigned char co
     }
 }
 
-void write_frame(struct frame_t frame) {
+/**
+ * writes static frame
+ */
+void write_frame(void) {
+    struct frame_t frame;
     frame.start_x = 0;
     frame.start_x = 479;
     frame.start_x = 68;
@@ -185,6 +252,10 @@ void write_frame(struct frame_t frame) {
     draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y), FRAME_COLOR);
 }
 
+/**
+ * clears display is the given frame
+ * @param frame
+ */
 void clear_display(struct frame_t frame) {
 
     window_set(frame);
@@ -192,7 +263,13 @@ void clear_display(struct frame_t frame) {
 
 }
 
-void write_circle(int x0, int y0, int radius) {
+/**
+ * Bresenham's cricle draw algorithm
+ * @param x0 circle center
+ * @param y0 circle center
+ * @param radius
+ */
+void draw_circle(int x0, int y0, int radius) {
     int f = 1 - radius;
     int ddF_x = 0;
     int ddF_y = -2 * radius;
@@ -225,17 +302,10 @@ void write_circle(int x0, int y0, int radius) {
     }
 }
 
-static struct frame_t get_frame(unsigned int start_x, unsigned int end_x, unsigned int start_y, unsigned int end_y) {
-    struct frame_t frame;
-    frame.start_x = start_x;
-    frame.end_x = end_x;
-    frame.start_y = start_y;
-    frame.end_y = end_y;
-    return frame;
-}
-
 //#############################################################################
 // main
+//#############################################################################
+
 int main(void) {
     SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_OSC | SYSCTL_OSC_MAIN |
                    SYSCTL_XTAL_16MHZ);
@@ -248,14 +318,14 @@ int main(void) {
     GPIOPinTypeGPIOOutput(GPIO_PORTM_BASE, OUTPUT_M);
     initialise_ssd1963();
 
-    struct frame_t frame;
-    frame = get_frame(0, 479, 0, 271);
-    clear_display(frame);
-    write_frame(frame);
-    frame = get_frame(0, 400, 70, 270);
-    window_set(frame);
-    write_circle(200, 271, 200);
-    write_circle(200, 271, 199);
+    struct frame_t whole_frame = get_frame(0, 479, 0, 271);
+    struct frame_t tacho_frame = get_frame(0, 400, 70, 270);
+    clear_display(whole_frame);
+    write_frame();
+
+    window_set(tacho_frame);
+    draw_circle(200, 271, 200);
+    draw_circle(200, 271, 199);
     while (1) {
 
     }
