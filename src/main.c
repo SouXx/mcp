@@ -5,14 +5,13 @@
 #include "main.h"
 #include <stdio.h>
 #include <tclDecls.h>
-#include <sysctl.h>
-#include "../tivaware/driverlib/interrupt.h"
-#include "../tivaware/driverlib/gpio.h"
-#include "../tivaware/driverlib/pin_map.h"
-#include "../tivaware/driverlib/rom.h"
-#include "../tivaware/driverlib/sysctl.c"
-#include "../tivaware/driverlib/uart.h"
-#include "../tivaware/inc/hw_memmap.h"
+#include "../tiva/driverlib/interrupt.h"
+#include "../tiva/driverlib/gpio.h"
+#include "../tiva/driverlib/pin_map.h"
+#include "../tiva/driverlib/rom.h"
+#include "../tiva/driverlib/sysctl.c"
+#include "../tiva/driverlib/uart.h"
+#include "../tiva/inc/hw_memmap.h"
 
 
 //#############################################################################
