@@ -169,6 +169,14 @@ void wait(void) {
     for (tmp = 0; tmp < 10000; tmp++);
 }
 
+int distance_abs(void){
+    int dezm = 0;
+    if(((distance_meter+5)%10) == 0){
+        dezm++;
+        return dezm;
+
+    }
+}
 //#############################################################################
 // Drawing functions
 //#############################################################################
@@ -244,7 +252,7 @@ void draw_rectangle(unsigned int delta_x, unsigned int delta_y, unsigned char co
  * @param x_start
  * @param y_start
  */
-void scale_up(int h_scale, int v_scale, char symbol_arr[5][5], int x_start, int y_start) {
+void write_scaled_arr(int h_scale, int v_scale, char **symbol_arr, int x_start, int y_start) {
     int x;
     int y;
     int xx;
