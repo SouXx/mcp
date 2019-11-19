@@ -236,6 +236,24 @@ void draw_rectangle(unsigned int delta_x, unsigned int delta_y, unsigned char co
     }
 }
 
+void scale_up(int h_scale, int v_scale, char symbol_arr[5][5], int x_start, int y_start){
+    int x;
+    int y;
+    int xx;
+    int yy;
+
+    for(y = 0; y <= 4; ++y){
+        for(x = 0; x <= 4; ++x){
+            for(xx = 0; xx < h_scale; ++xx){
+                for(yy = 0; yy < v_scale; ++yy){
+                    draw_pixel(x_start + x * h_scale + xx, y_start + y * v_scale + yy, FRAME_COLOR);
+                }
+            }
+        }
+    }
+
+}
+
 /**
  * writes static frame
  */
