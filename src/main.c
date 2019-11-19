@@ -236,16 +236,24 @@ void draw_rectangle(unsigned int delta_x, unsigned int delta_y, unsigned char co
     }
 }
 
-void scale_up(int h_scale, int v_scale, char symbol_arr[5][5], int x_start, int y_start){
+/**
+ *
+ * @param h_scale
+ * @param v_scale
+ * @param symbol_arr
+ * @param x_start
+ * @param y_start
+ */
+void scale_up(int h_scale, int v_scale, char symbol_arr[5][5], int x_start, int y_start) {
     int x;
     int y;
     int xx;
     int yy;
 
-    for(y = 0; y <= 4; ++y){
-        for(x = 0; x <= 4; ++x){
-            for(xx = 0; xx < h_scale; ++xx){
-                for(yy = 0; yy < v_scale; ++yy){
+    for (y = 0; y <= 4; ++y) {
+        for (x = 0; x <= 4; ++x) {
+            for (xx = 0; xx < h_scale; ++xx) {
+                for (yy = 0; yy < v_scale; ++yy) {
                     draw_pixel(x_start + x * h_scale + xx, y_start + y * v_scale + yy, FRAME_COLOR);
                 }
             }
@@ -329,6 +337,18 @@ void draw_circle(int x0, int y0, int radius) {
 }
 
 //#############################################################################
+// Interrupt handler
+//#############################################################################
+static volatile int distance_meter = 0;
+
+void s1_event_handler(void) {
+    IntMasterDisable();
+    distance_meter++;
+    IntPendClear(INT_GPIOP0);
+    IntMasterEnable();
+}
+
+//#############################################################################
 // main
 //#############################################################################
 
@@ -340,10 +360,16 @@ int main(void) {
     //Port  Clock Gating Control
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOM);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOL);
-    //Set direction
+
+    //Set Direction
     GPIOPinTypeGPIOOutput(GPIO_PORTL_BASE, OUTPUT_L);
     GPIOPinTypeGPIOOutput(GPIO_PORTM_BASE, OUTPUT_M);
     initialise_ssd1963();
+
+    //Int Init
+    GPIOIntRegister(GPIO_PORTP_BASE, s1_event_handler);
+    GPIOIntTypeSet(GPIO_PORTP_BASE, GPIO_INT_PIN_0, GPIO_RISING_EDGE);
+    GPIOIntEnable(GPIO_PORTP_BASE, GPIO_INT_PIN_0);
 
     struct frame_t whole_frame = get_frame(0, 479, 0, 271);
     struct frame_t tacho_frame = get_frame(0, 400, 70, 270);
@@ -354,9 +380,10 @@ int main(void) {
     draw_circle(200, 271, 200);
     draw_circle(200, 271, 199);
 
+    IntMasterEnable();
+
     while (1) {
         // IDLE
-        // comment
     }
 }
 
