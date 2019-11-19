@@ -12,7 +12,7 @@
 #include "../tiva/driverlib/sysctl.c"
 #include "../tiva/driverlib/uart.h"
 #include "../tiva/inc/hw_memmap.h"
-
+#include "../tiva/driverlib/systick.h"
 
 //#############################################################################
 // Defines
@@ -152,6 +152,8 @@ void initialise_ssd1963(void) {
  * @return struct frame_t
  */
 static struct frame_t get_frame(unsigned int start_x, unsigned int end_x, unsigned int start_y, unsigned int end_y) {
+
+
     struct frame_t frame;
     frame.start_x = start_x;
     frame.end_x = end_x;
@@ -161,6 +163,7 @@ static struct frame_t get_frame(unsigned int start_x, unsigned int end_x, unsign
 }
 
 void wait(void) {
+
     // TODO: refactor implementation
     volatile int tmp;
     for (tmp = 0; tmp < 10000; tmp++);
@@ -198,13 +201,16 @@ void window_set(struct frame_t frame) {
  * @param color of the pixel
  */
 void draw_pixel(unsigned int curr_x, unsigned int curr_y, unsigned char color) {
+
     struct frame_t frame;
     frame.end_y = curr_y;
     frame.start_y = curr_y;
     frame.start_x = curr_x;
     frame.end_x = curr_x;
+
     window_set(frame);
     write_command(0x2C);
+    // draw RGB
     write_data(color);
     write_data(color);
     write_data(color);
@@ -234,6 +240,7 @@ void draw_rectangle(unsigned int delta_x, unsigned int delta_y, unsigned char co
  * writes static frame
  */
 void write_frame(void) {
+
     struct frame_t frame;
     frame.start_x = 0;
     frame.start_x = 479;
@@ -270,6 +277,7 @@ void clear_display(struct frame_t frame) {
  * @param radius
  */
 void draw_circle(int x0, int y0, int radius) {
+
     int f = 1 - radius;
     int ddF_x = 0;
     int ddF_y = -2 * radius;
@@ -307,6 +315,7 @@ void draw_circle(int x0, int y0, int radius) {
 //#############################################################################
 
 int main(void) {
+
     SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_OSC | SYSCTL_OSC_MAIN |
                    SYSCTL_XTAL_16MHZ);
 
@@ -329,6 +338,7 @@ int main(void) {
 
     while (1) {
         // IDLE
+        // comment
     }
 }
 
