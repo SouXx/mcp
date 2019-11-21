@@ -184,9 +184,9 @@ void wait(void) {
     for (tmp = 0; tmp < 10000; tmp++);
 }
 
-int distance_abs(void){
+int distance_abs(void) {
     int dezm = 0;
-    if(((distance_meter+5)%10) == 0){
+    if (((distance_meter + 5) % 10) == 0) {
         dezm++;
         return dezm;
 
@@ -377,6 +377,36 @@ void s1_event_handler(void) {
 
 int main(void) {
 
+    char K[5][5] = {{1, 0, 0, 0, 1},
+                    {1, 0, 0, 1, 0},
+                    {1, 0, 1, 0, 0},
+                    {1, 1, 0, 1, 0},
+                    {1, 0, 0, 0, 1}};
+
+    char M[5][5] = {{1, 0, 0, 0, 1},
+                    {1, 1, 0, 1, 1},
+                    {1, 0, 1, 0, 1},
+                    {1, 0, 0, 0, 1},
+                    {1, 0, 0, 0, 1}};
+
+    char V[5][5] = {{1, 0, 0, 0, 1},
+                    {1, 0, 0, 0, 1},
+                    {0, 1, 0, 1, 0},
+                    {0, 1, 0, 1, 0},
+                    {0, 0, 1, 0, 0}};
+
+    char R[5][5] = {{1, 1, 1, 0, 0},
+                    {1, 0, 0, 1, 0},
+                    {1, 1, 1, 0, 0},
+                    {1, 0, 0, 1, 0},
+                    {1, 0, 0, 0, 1}};
+
+    char DP[5][5] = {{0, 0, 0, 0, 0},
+                     {0, 0, 1, 0, 0},
+                     {0, 0, 0, 0, 0},
+                     {0, 0, 1, 0, 0},
+                     {0, 0, 0, 0, 0}};
+
     SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_OSC | SYSCTL_OSC_MAIN |
                    SYSCTL_XTAL_16MHZ);
 
@@ -402,6 +432,11 @@ int main(void) {
     window_set(tacho_frame);
     draw_circle(200, 271, 200);
     draw_circle(200, 271, 199);
+
+    write_scaled_arr(5,6,K,10,10);
+    write_scaled_arr(5,6,M,47,10);
+    write_scaled_arr(5,6,DP,64,10);
+    write_scaled_arr(8,8,V,410,90);
 
     IntMasterEnable();
 
