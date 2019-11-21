@@ -267,7 +267,7 @@ void draw_rectangle(unsigned int delta_x, unsigned int delta_y, unsigned char co
  * @param x_start pixel x direction
  * @param y_start pixel y direction
  */
-void write_scaled_arr(int h_scale, int v_scale, char **symbol_arr, int x_start, int y_start) {
+void write_scaled_arr(int h_scale, int v_scale, char symbol_arr[5][5], int x_start, int y_start) {
     int x;
     int y;
     int xx;
@@ -275,9 +275,11 @@ void write_scaled_arr(int h_scale, int v_scale, char **symbol_arr, int x_start, 
 
     for (y = 0; y <= 4; ++y) {
         for (x = 0; x <= 4; ++x) {
-            for (xx = 0; xx < h_scale; ++xx) {
-                for (yy = 0; yy < v_scale; ++yy) {
-                    draw_pixel(x_start + x * h_scale + xx, y_start + y * v_scale + yy, FRAME_COLOR);
+            if (symbol_arr[y][x] == 1) {
+                for (xx = 0; xx < h_scale; ++xx) {
+                    for (yy = 0; yy < v_scale; ++yy) {
+                        draw_pixel(x_start + x * h_scale + xx, y_start + y * v_scale + yy, FRAME_COLOR);
+                    }
                 }
             }
         }
@@ -433,10 +435,10 @@ int main(void) {
     draw_circle(200, 271, 200);
     draw_circle(200, 271, 199);
 
-    write_scaled_arr(5,6,K,10,10);
-    write_scaled_arr(5,6,M,47,10);
-    write_scaled_arr(5,6,DP,64,10);
-    write_scaled_arr(8,8,V,410,90);
+    write_scaled_arr(5, 6, K, 10, 10);
+    write_scaled_arr(5, 6, M, 47, 10);
+    write_scaled_arr(5, 6, DP, 64, 10);
+    write_scaled_arr(8, 8, V, 410, 90);
 
     IntMasterEnable();
 
