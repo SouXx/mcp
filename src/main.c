@@ -292,9 +292,9 @@ void write_frame(void) {
 
     struct frame_t frame;
     frame.start_x = 0;
-    frame.start_x = 479;
-    frame.start_x = 68;
-    frame.start_x = 70;
+    frame.end_x = 479;
+    frame.start_y = 68;
+    frame.end_y = 70;
 
     window_set(frame);
     draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y), FRAME_COLOR);
