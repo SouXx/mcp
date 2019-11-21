@@ -28,6 +28,21 @@
 #define BACKGROUND_COLOR    0x00
 #define FRAME_COLOR         0xFF
 
+
+//#############################################################################
+// GLOBAL / Typedef
+//#############################################################################
+static volatile int distance_meter = 0;
+static volatile int *dist;
+
+struct frame_t {
+    unsigned int start_x;
+    unsigned int end_x;
+    unsigned int start_y;
+    unsigned int end_y;
+};
+
+
 //#############################################################################
 // Display utilities
 //#############################################################################
@@ -347,9 +362,6 @@ void draw_circle(int x0, int y0, int radius) {
 //#############################################################################
 // Interrupt handler
 //#############################################################################
-
-static volatile int distance_meter = 0;
-static volatile int *dist;
 
 void s1_event_handler(void) {
     IntMasterDisable();

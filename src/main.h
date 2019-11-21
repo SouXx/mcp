@@ -6,12 +6,12 @@
 #define MCP_PRAKTIKUM_MAIN_H
 
 
-struct frame_t {
-    unsigned int start_x;
-    unsigned int end_x;
-    unsigned int start_y;
-    unsigned int end_y;
-};
+//struct frame_t {
+//    unsigned int start_x;
+//    unsigned int end_x;
+//    unsigned int start_y;
+//    unsigned int end_y;
+//};
 
 
 void clear_display(struct frame_t frame);
