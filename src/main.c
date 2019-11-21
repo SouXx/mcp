@@ -348,9 +348,11 @@ void draw_circle(int x0, int y0, int radius) {
 // Interrupt handler
 //#############################################################################
 static volatile int distance_meter = 0;
+static volatile int *dist;
 
 void s1_event_handler(void) {
     IntMasterDisable();
+    ++dist;
     distance_meter++;
     IntPendClear(INT_GPIOP0);
     IntMasterEnable();
