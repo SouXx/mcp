@@ -246,11 +246,11 @@ void draw_rectangle(unsigned int delta_x, unsigned int delta_y, unsigned char co
 
 /**
  *
- * @param h_scale
- * @param v_scale
- * @param symbol_arr
- * @param x_start
- * @param y_start
+ * @param h_scale factor
+ * @param v_scale factor
+ * @param symbol_arr array to scale
+ * @param x_start pixel x direction
+ * @param y_start pixel y direction
  */
 void write_scaled_arr(int h_scale, int v_scale, char **symbol_arr, int x_start, int y_start) {
     int x;
@@ -347,6 +347,7 @@ void draw_circle(int x0, int y0, int radius) {
 //#############################################################################
 // Interrupt handler
 //#############################################################################
+
 static volatile int distance_meter = 0;
 static volatile int *dist;
 
