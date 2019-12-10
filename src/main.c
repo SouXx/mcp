@@ -20,6 +20,7 @@
 
 #define OUTPUT_L            GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4
 #define OUTPUT_M            GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7
+#define INPUT_P                GPIO_PIN_0 | GPIO_PIN_1
 #define DISPLAY_WR          GPIO_PIN_1      // write state
 #define DISPLAY_CS          GPIO_PIN_3      // chip select
 #define DISPLAY_RS          GPIO_PIN_2      // mode select (command/data)
@@ -27,13 +28,17 @@
 #define SELECT_AND_WRITE    (DISPLAY_CS | DISPLAY_WR)
 #define BACKGROUND_COLOR    0x00
 #define FRAME_COLOR         0xFF
-
+#define OFFSET                5
 
 //#############################################################################
 // GLOBAL / Typedef
 //#############################################################################
-static volatile int distance_meter = 0;
-static volatile int *dist;
+static volatile int distance_meter = 0 + OFFSET;
+
+enum dir {
+    FORWARD = 0, BACKWARD = 1
+};
+static volatile bool direction = FORWARD;
 
 struct frame_t {
     unsigned int start_x;
@@ -42,7 +47,78 @@ struct frame_t {
     unsigned int end_y;
 };
 
+char K[5][5] = {{1, 0, 0, 0, 1},
+                {1, 0, 0, 1, 0},
+                {1, 0, 1, 0, 0},
+                {1, 1, 0, 1, 0},
+                {1, 0, 0, 0, 1}};
 
+char M[5][5] = {{1, 0, 0, 0, 1},
+                {1, 1, 0, 1, 1},
+                {1, 0, 1, 0, 1},
+                {1, 0, 0, 0, 1},
+                {1, 0, 0, 0, 1}};
+
+char V[5][5] = {{1, 0, 0, 0, 1},
+                {1, 0, 0, 0, 1},
+                {0, 1, 0, 1, 0},
+                {0, 1, 0, 1, 0},
+                {0, 0, 1, 0, 0}};
+
+char R[5][5] = {{1, 1, 1, 0, 0},
+                {1, 0, 0, 1, 0},
+                {1, 1, 1, 0, 0},
+                {1, 0, 0, 1, 0},
+                {1, 0, 0, 0, 1}};
+
+char DP[5][5] = {{0, 0, 0, 0, 0},
+                 {0, 0, 1, 0, 0},
+                 {0, 0, 0, 0, 0},
+                 {0, 0, 1, 0, 0},
+                 {0, 0, 0, 0, 0}};
+
+char NUMBER[10][5][5] = {{{0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {1, 0, 0, 1, 0}, {1, 0, 0, 1, 0}, {0, 1, 1, 0, 0}},
+                         {{0, 0, 1, 0, 0}, {0, 1, 1, 0, 0}, {0, 0, 1, 0, 0}, {0, 0, 1, 0, 0}, {0, 1, 1, 1, 0}},
+                         {{0, 1, 1, 0, 0}, {1, 0, 1, 0, 0}, {0, 0, 1, 0, 0}, {0, 1, 0, 1, 0}, {1, 1, 1, 0, 0}},
+                         {{0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {0, 0, 1, 0, 0}, {1, 0, 0, 1, 0}, {0, 1, 1, 0, 0}},
+                         {{1, 0, 0, 0, 0}, {1, 0, 1, 0, 0}, {1, 1, 1, 1, 0}, {0, 0, 1, 0, 0}, {0, 0, 1, 0, 0}},
+                         {{1, 1, 1, 0, 0}, {1, 0, 0, 0, 0}, {1, 1, 0, 0, 0}, {0, 0, 1, 0, 0}, {1, 1, 0, 0, 0}},
+                         {{0, 0, 1, 1, 0}, {0, 1, 0, 0, 0}, {1, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {1, 1, 1, 0, 0}},
+                         {{1, 1, 1, 1, 0}, {0, 0, 0, 1, 0}, {0, 0, 1, 0, 0}, {0, 1, 0, 0, 0}, {1, 0, 0, 0, 0}},
+                         {{0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {0, 1, 1, 0, 0}},
+                         {{0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {0, 1, 1, 1, 0}, {0, 0, 0, 1, 0}, {0, 1, 1, 0, 0}}};
+
+//#############################################################################
+// Helper functions
+//#############################################################################
+
+/**
+ * helper class, returns full initilized struct
+ * @param start_x
+ * @param end_x
+ * @param start_y
+ * @param end_y
+ * @return struct frame_t
+ */
+
+static struct frame_t get_frame(unsigned int start_x, unsigned int end_x,
+                                unsigned int start_y, unsigned int end_y) {
+
+    struct frame_t frame;
+    frame.start_x = start_x;
+    frame.end_x = end_x;
+    frame.start_y = start_y;
+    frame.end_y = end_y;
+    return frame;
+}
+
+void wait(void) {
+
+    // TODO: refactor implementation
+    volatile int tmp;
+    for (tmp = 0; tmp < 10000; tmp++) {
+    };
+}
 //#############################################################################
 // Display utilities
 //#############################################################################
@@ -155,44 +231,6 @@ void initialise_ssd1963(void) {
 }
 
 //#############################################################################
-// Helper functions
-//#############################################################################
-
-/**
- * helper class, returns full initilized struct
- * @param start_x
- * @param end_x
- * @param start_y
- * @param end_y
- * @return struct frame_t
- */
-static struct frame_t get_frame(unsigned int start_x, unsigned int end_x, unsigned int start_y, unsigned int end_y) {
-
-
-    struct frame_t frame;
-    frame.start_x = start_x;
-    frame.end_x = end_x;
-    frame.start_y = start_y;
-    frame.end_y = end_y;
-    return frame;
-}
-
-void wait(void) {
-
-    // TODO: refactor implementation
-    volatile int tmp;
-    for (tmp = 0; tmp < 10000; tmp++);
-}
-
-int distance_abs(void) {
-    int dezm = 0;
-    if (((distance_meter + 5) % 10) == 0) {
-        dezm++;
-        return dezm;
-
-    }
-}
-//#############################################################################
 // Drawing functions
 //#############################################################################
 
@@ -245,7 +283,8 @@ void draw_pixel(unsigned int curr_x, unsigned int curr_y, unsigned char color) {
  * @param delta_y
  * @param color
  */
-void draw_rectangle(unsigned int delta_x, unsigned int delta_y, unsigned char color) {
+void draw_rectangle(unsigned int delta_x, unsigned int delta_y,
+                    unsigned char color) {
 
     write_command(0x2C);
     unsigned int y = 0;
@@ -267,7 +306,8 @@ void draw_rectangle(unsigned int delta_x, unsigned int delta_y, unsigned char co
  * @param x_start pixel x direction
  * @param y_start pixel y direction
  */
-void write_scaled_arr(int h_scale, int v_scale, char symbol_arr[5][5], int x_start, int y_start) {
+void write_scaled_arr(int h_scale, int v_scale, char symbol_arr[5][5],
+                      int x_start, int y_start) {
     int x;
     int y;
     int xx;
@@ -278,7 +318,8 @@ void write_scaled_arr(int h_scale, int v_scale, char symbol_arr[5][5], int x_sta
             if (symbol_arr[y][x] == 1) {
                 for (xx = 0; xx < h_scale; ++xx) {
                     for (yy = 0; yy < v_scale; ++yy) {
-                        draw_pixel(x_start + x * h_scale + xx, y_start + y * v_scale + yy, FRAME_COLOR);
+                        draw_pixel(x_start + x * h_scale + xx,
+                                   y_start + y * v_scale + yy, FRAME_COLOR);
                     }
                 }
             }
@@ -299,7 +340,8 @@ void write_frame(void) {
     frame.end_y = 70;
 
     window_set(frame);
-    draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y), FRAME_COLOR);
+    draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y),
+                   FRAME_COLOR);
 
     frame.start_x = 400;
     frame.end_x = 402;
@@ -307,7 +349,8 @@ void write_frame(void) {
     frame.end_y = 271;
 
     window_set(frame);
-    draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y), FRAME_COLOR);
+    draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y),
+                   FRAME_COLOR);
 }
 
 /**
@@ -317,7 +360,8 @@ void write_frame(void) {
 void clear_display(struct frame_t frame) {
 
     window_set(frame);
-    draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y), BACKGROUND_COLOR);
+    draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y),
+                   BACKGROUND_COLOR);
 
 }
 
@@ -367,9 +411,17 @@ void draw_circle(int x0, int y0, int radius) {
 
 void s1_event_handler(void) {
     IntMasterDisable();
-    ++dist;
     distance_meter++;
-    IntPendClear(INT_GPIOP0);
+    //get timer
+    //calc velocity
+
+    if (GPIOPinRead(GPIO_PORTP_BASE, GPIO_INT_PIN_1) == 2) {
+        direction = FORWARD;
+    } else {
+        direction = BACKWARD;
+    }
+
+    GPIOIntClear(GPIO_PORTP_BASE, GPIO_INT_PIN_0);
     IntMasterEnable();
 }
 
@@ -379,46 +431,19 @@ void s1_event_handler(void) {
 
 int main(void) {
 
-    char K[5][5] = {{1, 0, 0, 0, 1},
-                    {1, 0, 0, 1, 0},
-                    {1, 0, 1, 0, 0},
-                    {1, 1, 0, 1, 0},
-                    {1, 0, 0, 0, 1}};
-
-    char M[5][5] = {{1, 0, 0, 0, 1},
-                    {1, 1, 0, 1, 1},
-                    {1, 0, 1, 0, 1},
-                    {1, 0, 0, 0, 1},
-                    {1, 0, 0, 0, 1}};
-
-    char V[5][5] = {{1, 0, 0, 0, 1},
-                    {1, 0, 0, 0, 1},
-                    {0, 1, 0, 1, 0},
-                    {0, 1, 0, 1, 0},
-                    {0, 0, 1, 0, 0}};
-
-    char R[5][5] = {{1, 1, 1, 0, 0},
-                    {1, 0, 0, 1, 0},
-                    {1, 1, 1, 0, 0},
-                    {1, 0, 0, 1, 0},
-                    {1, 0, 0, 0, 1}};
-
-    char DP[5][5] = {{0, 0, 0, 0, 0},
-                     {0, 0, 1, 0, 0},
-                     {0, 0, 0, 0, 0},
-                     {0, 0, 1, 0, 0},
-                     {0, 0, 0, 0, 0}};
-
     SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_OSC | SYSCTL_OSC_MAIN |
                    SYSCTL_XTAL_16MHZ);
 
     //Port  Clock Gating Control
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOM);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOL);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOP);
 
     //Set Direction
     GPIOPinTypeGPIOOutput(GPIO_PORTL_BASE, OUTPUT_L);
     GPIOPinTypeGPIOOutput(GPIO_PORTM_BASE, OUTPUT_M);
+    GPIOPinTypeGPIOInput(GPIO_PORTP_BASE, INPUT_P);
+
     initialise_ssd1963();
 
     //Int Init
@@ -428,6 +453,9 @@ int main(void) {
 
     struct frame_t whole_frame = get_frame(0, 479, 0, 271);
     struct frame_t tacho_frame = get_frame(0, 400, 70, 270);
+    struct frame_t direction_frame = get_frame(403, 479, 71, 270);
+    struct frame_t meter_frame = get_frame(80, 250, 0, 50);
+
     clear_display(whole_frame);
     write_frame();
 
@@ -441,9 +469,36 @@ int main(void) {
     write_scaled_arr(8, 8, V, 410, 90);
 
     IntMasterEnable();
+    clear_display(direction_frame);
 
     while (1) {
+
+        static bool tmp;
+
+        if (direction == BACKWARD) {
+            clear_display(direction_frame);
+            write_scaled_arr(8, 8, R, 410, 90);
+        } else {
+            clear_display(direction_frame);
+            write_scaled_arr(8, 8, V, 410, 90);
+        }
+
+        if ((distance_meter % 10) == 0) {
+
+            int h_km = ((distance_meter / 100000) % 10);
+            int ten_km = ((distance_meter - h_km * 100000) / 10000) % 10;
+            int one_km = ((distance_meter - ten_km * 10000) / 1000) % 10;
+            int h_m = ((distance_meter - one_km * 1000) / 100) % 10;
+            int ten_m = ((distance_meter - h_m * 100) / 10) % 10;
+            clear_display(meter_frame);
+            write_scaled_arr(5, 6, &NUMBER[h_km], 94, 10);
+            write_scaled_arr(5, 6, &NUMBER[ten_km], 124, 10);
+            write_scaled_arr(5, 6, &NUMBER[one_km], 154, 10);
+            write_scaled_arr(5, 6, &NUMBER[h_m], 184, 10);
+            write_scaled_arr(5, 6, &NUMBER[ten_m], 210, 10);
+        }
+
+        //tmp = direction;
         // IDLE
     }
 }
-
