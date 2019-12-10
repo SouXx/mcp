@@ -1,18 +1,16 @@
-//
-// Created by tobi on 24.10.19.
-//
+#include <stdint.h>
+#include <stdbool.h>
+#include <math.h>
 
-#include "main.h"
-#include <stdio.h>
-#include <tclDecls.h>
-#include "../tiva/driverlib/interrupt.h"
-#include "../tiva/driverlib/gpio.h"
-#include "../tiva/driverlib/pin_map.h"
-#include "../tiva/driverlib/rom.h"
-#include "../tiva/driverlib/sysctl.c"
-#include "../tiva/driverlib/uart.h"
-#include "../tiva/inc/hw_memmap.h"
-#include "../tiva/driverlib/systick.h"
+#include "inc/hw_memmap.h"
+#include "inc/hw_types.h"
+#include "driverlib/debug.h"
+#include "driverlib/gpio.h"
+#include "driverlib/pin_map.h"
+#include "driverlib/rom.h"
+#include "driverlib/sysctl.h"
+#include "utils/uartstdio.h"
+#include "driverlib/uart.h"
 
 //#############################################################################
 // Defines
@@ -34,11 +32,7 @@
 // GLOBAL / Typedef
 //#############################################################################
 static volatile int distance_meter = 0 + OFFSET;
-
-enum dir {
-    FORWARD = 0, BACKWARD = 1
-};
-static volatile bool direction = FORWARD;
+static volatile int measure_call_cnt_velo = 0;
 
 struct frame_t {
     unsigned int start_x;
@@ -47,46 +41,69 @@ struct frame_t {
     unsigned int end_y;
 };
 
+enum dir {
+    FORWARD = 0, BACKWARD = 1
+};
+static volatile bool direction = FORWARD;
+
 char K[5][5] = {{1, 0, 0, 0, 1},
                 {1, 0, 0, 1, 0},
                 {1, 0, 1, 0, 0},
-                {1, 1, 0, 1, 0},
+                {1,
+                    1, 0, 1, 0},
                 {1, 0, 0, 0, 1}};
 
 char M[5][5] = {{1, 0, 0, 0, 1},
                 {1, 1, 0, 1, 1},
                 {1, 0, 1, 0, 1},
-                {1, 0, 0, 0, 1},
+                {1,
+                    0, 0, 0, 1},
                 {1, 0, 0, 0, 1}};
 
 char V[5][5] = {{1, 0, 0, 0, 1},
                 {1, 0, 0, 0, 1},
                 {0, 1, 0, 1, 0},
-                {0, 1, 0, 1, 0},
+                {0,
+                    1, 0, 1, 0},
                 {0, 0, 1, 0, 0}};
 
 char R[5][5] = {{1, 1, 1, 0, 0},
                 {1, 0, 0, 1, 0},
                 {1, 1, 1, 0, 0},
-                {1, 0, 0, 1, 0},
+                {1,
+                    0, 0, 1, 0},
                 {1, 0, 0, 0, 1}};
 
 char DP[5][5] = {{0, 0, 0, 0, 0},
                  {0, 0, 1, 0, 0},
                  {0, 0, 0, 0, 0},
-                 {0, 0, 1, 0, 0},
+                 {0,
+                     0, 1, 0, 0},
                  {0, 0, 0, 0, 0}};
 
-char NUMBER[10][5][5] = {{{0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {1, 0, 0, 1, 0}, {1, 0, 0, 1, 0}, {0, 1, 1, 0, 0}},
-                         {{0, 0, 1, 0, 0}, {0, 1, 1, 0, 0}, {0, 0, 1, 0, 0}, {0, 0, 1, 0, 0}, {0, 1, 1, 1, 0}},
-                         {{0, 1, 1, 0, 0}, {1, 0, 1, 0, 0}, {0, 0, 1, 0, 0}, {0, 1, 0, 1, 0}, {1, 1, 1, 0, 0}},
-                         {{0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {0, 0, 1, 0, 0}, {1, 0, 0, 1, 0}, {0, 1, 1, 0, 0}},
-                         {{1, 0, 0, 0, 0}, {1, 0, 1, 0, 0}, {1, 1, 1, 1, 0}, {0, 0, 1, 0, 0}, {0, 0, 1, 0, 0}},
-                         {{1, 1, 1, 0, 0}, {1, 0, 0, 0, 0}, {1, 1, 0, 0, 0}, {0, 0, 1, 0, 0}, {1, 1, 0, 0, 0}},
-                         {{0, 0, 1, 1, 0}, {0, 1, 0, 0, 0}, {1, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {1, 1, 1, 0, 0}},
-                         {{1, 1, 1, 1, 0}, {0, 0, 0, 1, 0}, {0, 0, 1, 0, 0}, {0, 1, 0, 0, 0}, {1, 0, 0, 0, 0}},
-                         {{0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {0, 1, 1, 0, 0}},
-                         {{0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {0, 1, 1, 1, 0}, {0, 0, 0, 1, 0}, {0, 1, 1, 0, 0}}};
+char NUMBER[10][5][5] = {{{0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {1, 0, 0, 1,
+                                                                         0}, {1, 0, 0, 1, 0}, {0, 1, 1, 0, 0}},
+                         {{0, 0, 1, 0, 0}, {0,
+                                               1, 1, 0, 0}, {0, 0, 1, 0, 0}, {0, 0, 1, 0, 0}, {0, 1, 1, 1, 0}},
+                         {{0, 1, 1, 0, 0}, {1, 0, 1, 0, 0}, {0, 0, 1, 0, 0}, {0, 1, 0, 1,
+                                                                                          0}, {1, 1, 1, 0, 0}},
+                         {{0, 1, 1, 0, 0},
+                                           {1, 0, 0, 1, 0}, {0, 0, 1, 0, 0}, {1, 0, 0, 1, 0}, {0, 1,
+                                                                                                     1, 0, 0}},
+                         {{1, 0, 0, 0, 0}, {1, 0, 1, 0, 0}, {
+                                                             1, 1, 1, 1, 0}, {0, 0, 1, 0, 0}, {0, 0, 1, 0, 0}},
+                         {{1,
+                              1, 1, 0, 0}, {1, 0, 0, 0, 0}, {1, 1, 0, 0, 0}, {0, 0, 1,
+                                                                                       0, 0}, {1, 1, 0, 0, 0}},
+                         {{0, 0, 1, 1, 0}, {0, 1, 0, 0,
+                                                        0}, {1, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {1, 1, 1, 0, 0}},
+                         {{1, 1, 1, 1, 0}, {0, 0, 0, 1, 0}, {0, 0, 1, 0, 0}, {0, 1, 0, 0,
+                                                                                          0}, {1, 0, 0, 0, 0}},
+                         {{0, 1, 1, 0, 0},
+                                           {1, 0, 0, 1, 0}, {0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {0, 1,
+                                                                                                     1, 0, 0}},
+                         {{0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {
+                                                             0, 1, 1, 1, 0}, {0, 0, 0, 1, 0}, {0, 1, 1, 0, 0}}};
 
 //#############################################################################
 // Helper functions
@@ -112,12 +129,38 @@ static struct frame_t get_frame(unsigned int start_x, unsigned int end_x,
     return frame;
 }
 
+void toggle_gpio() {
+    static bool tmp;
+
+    if (tmp) {
+        GPIOPinWrite(GPIO_PORTK_BASE, GPIO_PIN_0, 0xFF);
+    } else {
+        GPIOPinWrite(GPIO_PORTK_BASE, GPIO_PIN_0, 0x00);
+    }
+    tmp = !tmp;
+}
+
+
 void wait(void) {
 
     // TODO: refactor implementation
     volatile int tmp;
     for (tmp = 0; tmp < 10000; tmp++) {
     };
+}
+
+struct frame_t calculate_pointer(double velocity) {
+    double radius = 200;
+    double rad = 3.14 * (velocity / 400);
+    double gk = sin(rad) * radius;
+    double ak = abs(cos(rad) * radius);
+
+    if ((int) velocity < (int) 200) {
+        return get_frame(200, 200 - ak, 271, 271 - gk);
+    } else {
+        return get_frame(200, 200 + ak, 271, 271 - gk);
+    }
+
 }
 //#############################################################################
 // Display utilities
@@ -277,6 +320,32 @@ void draw_pixel(unsigned int curr_x, unsigned int curr_y, unsigned char color) {
     write_data(color);
 }
 
+void draw_line(struct frame_t frame) {
+    int x0 = frame.start_x;
+    int x1 = frame.end_x;
+    int y0 = frame.start_y;
+    int y1 = frame.end_y;
+
+    int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+    int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+    int err = dx + dy, e2; /* error value e_xy */
+
+    while (1) {
+        draw_pixel(x0, y0, FRAME_COLOR);
+        if (x0 == x1 && y0 == y1)
+            break;
+        e2 = 2 * err;
+        if (e2 > dy) {
+            err += dy;
+            x0 += sx;
+        } /* e_xy+e_x > 0 */
+        if (e2 < dx) {
+            err += dx;
+            y0 += sy;
+        } /* e_xy+e_y < 0 */
+    }
+}
+
 /**
  * draws a rectangle
  * @param delta_x
@@ -412,8 +481,7 @@ void draw_circle(int x0, int y0, int radius) {
 void s1_event_handler(void) {
     IntMasterDisable();
     distance_meter++;
-    //get timer
-    //calc velocity
+    measure_call_cnt_velo++;
 
     if (GPIOPinRead(GPIO_PORTP_BASE, GPIO_INT_PIN_1) == 2) {
         direction = FORWARD;
@@ -423,25 +491,68 @@ void s1_event_handler(void) {
 
     GPIOIntClear(GPIO_PORTP_BASE, GPIO_INT_PIN_0);
     IntMasterEnable();
+
 }
 
+void systick_handler(void) {
+
+    toggle_gpio();
+    volatile struct frame_t direction_frame = get_frame(403, 479, 71, 270);
+    volatile struct frame_t meter_frame = get_frame(80, 250, 0, 50);
+    //update display
+    static volatile bool curdirection;
+
+    double velocity = (1 / 0.1) * (double) measure_call_cnt_velo * 3.6;
+
+    draw_line(calculate_pointer(velocity));
+    measure_call_cnt_velo = 0;
+    if (curdirection != direction) {
+        if (direction == BACKWARD) {
+            clear_display(direction_frame);
+            write_scaled_arr(8, 8, R, 410, 90);
+        } else {
+            clear_display(direction_frame);
+            write_scaled_arr(8, 8, V, 410, 90);
+        }
+
+    }
+
+    volatile int h_km = ((distance_meter / 100000) % 10);
+    volatile int ten_km = ((distance_meter - h_km * 100000) / 10000) % 10;
+    volatile int one_km = ((distance_meter - ten_km * 10000) / 1000) % 10;
+    volatile int h_m = ((distance_meter - one_km * 1000) / 100) % 10;
+    volatile int ten_m = ((distance_meter - h_m * 100) / 10) % 10;
+    clear_display(meter_frame);
+    write_scaled_arr(5, 6, &NUMBER[h_km], 94, 10);
+    write_scaled_arr(5, 6, &NUMBER[ten_km], 124, 10);
+    write_scaled_arr(5, 6, &NUMBER[one_km], 154, 10);
+    write_scaled_arr(5, 6, &NUMBER[h_m], 184, 10);
+    write_scaled_arr(5, 6, &NUMBER[ten_m], 210, 10);
+
+    curdirection = direction;
+}
 //#############################################################################
 // main
 //#############################################################################
 
 int main(void) {
 
-    SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_OSC | SYSCTL_OSC_MAIN |
-                   SYSCTL_XTAL_16MHZ);
+
+    int ticks_per_sec = SysCtlClockFreqSet((SYSCTL_XTAL_25MHZ |
+                                            SYSCTL_OSC_MAIN |
+                                            SYSCTL_USE_PLL |
+                                            SYSCTL_CFG_VCO_480), 120000000);
 
     //Port  Clock Gating Control
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOM);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOL);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOP);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOK);
 
     //Set Direction
-    GPIOPinTypeGPIOOutput(GPIO_PORTL_BASE, OUTPUT_L);
+    GPIOPinTypeGPIOOutput(GPIO_PORTL_BASE, (OUTPUT_L | GPIO_PIN_5));
     GPIOPinTypeGPIOOutput(GPIO_PORTM_BASE, OUTPUT_M);
+    GPIOPinTypeGPIOOutput(GPIO_PORTK_BASE, GPIO_PIN_0);
     GPIOPinTypeGPIOInput(GPIO_PORTP_BASE, INPUT_P);
 
     initialise_ssd1963();
@@ -469,36 +580,15 @@ int main(void) {
     write_scaled_arr(8, 8, V, 410, 90);
 
     IntMasterEnable();
-    clear_display(direction_frame);
+
+    //SysTick config
+    SysTickIntEnable();
+    SysTickEnable();
+    SysTickIntRegister(systick_handler);
+    SysTickPeriodSet((ticks_per_sec / 0.1));
+
 
     while (1) {
 
-        static bool tmp;
-
-        if (direction == BACKWARD) {
-            clear_display(direction_frame);
-            write_scaled_arr(8, 8, R, 410, 90);
-        } else {
-            clear_display(direction_frame);
-            write_scaled_arr(8, 8, V, 410, 90);
-        }
-
-        if ((distance_meter % 10) == 0) {
-
-            int h_km = ((distance_meter / 100000) % 10);
-            int ten_km = ((distance_meter - h_km * 100000) / 10000) % 10;
-            int one_km = ((distance_meter - ten_km * 10000) / 1000) % 10;
-            int h_m = ((distance_meter - one_km * 1000) / 100) % 10;
-            int ten_m = ((distance_meter - h_m * 100) / 10) % 10;
-            clear_display(meter_frame);
-            write_scaled_arr(5, 6, &NUMBER[h_km], 94, 10);
-            write_scaled_arr(5, 6, &NUMBER[ten_km], 124, 10);
-            write_scaled_arr(5, 6, &NUMBER[one_km], 154, 10);
-            write_scaled_arr(5, 6, &NUMBER[h_m], 184, 10);
-            write_scaled_arr(5, 6, &NUMBER[ten_m], 210, 10);
-        }
-
-        //tmp = direction;
         // IDLE
     }
-}
