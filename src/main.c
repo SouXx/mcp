@@ -44,6 +44,7 @@ struct frame_t {
 enum dir {
     FORWARD = 0, BACKWARD = 1
 };
+
 static volatile bool direction = FORWARD;
 
 char K[5][5] = {{1, 0, 0, 0, 1},
@@ -589,6 +590,6 @@ int main(void) {
 
 
     while (1) {
-
         // IDLE
     }
+}
