@@ -496,11 +496,26 @@ void s1_event_handler(void) {
     TimerLoadSet(TIMER0_BASE, TIMER_A, CLOCK_FREQUENCY); // reset Timer
     TimerEnable(TIMER0_BASE, TIMER_A);
 
+
+    double velocity = ((double)time_since_last_call/(double)CLOCK_FREQUENCY)*(400.0/3.6);
+
     if (GPIOPinRead(GPIO_PORTP_BASE, GPIO_INT_PIN_1) == 2) {
         direction = FORWARD;
     } else {
         direction = BACKWARD;
     }
+
+    volatile uint32_t h_km = ((distance_meter / 100000) % 10);
+    volatile uint32_t ten_km = ((distance_meter - h_km * 100000) / 10000) % 10;
+    volatile uint32_t one_km = ((distance_meter - ten_km * 10000) / 1000) % 10;
+    volatile uint32_t h_m = ((distance_meter - one_km * 1000) / 100) % 10;
+    volatile uint32_t ten_m = ((distance_meter - h_m * 100) / 10) % 10;
+    clear_display(meter_frame);
+    write_scaled_arr(5, 6, &NUMBER[h_km], 94, 10);
+    write_scaled_arr(5, 6, &NUMBER[ten_km], 124, 10);
+    write_scaled_arr(5, 6, &NUMBER[one_km], 154, 10);
+    write_scaled_arr(5, 6, &NUMBER[h_m], 184, 10);
+    write_scaled_arr(5, 6, &NUMBER[ten_m], 210, 10);
 
     GPIOIntClear(GPIO_PORTP_BASE, GPIO_INT_PIN_0);
     IntMasterEnable();
@@ -515,7 +530,6 @@ void systick_handler(void) {
     //update display
     static volatile bool curdirection;
 
-    double velocity = (time_since_last_call/CLOCK_FREQUENCY)*400;
 
     draw_line(calculate_pointer(velocity));
     measure_call_cnt_velo = 0;
@@ -529,18 +543,6 @@ void systick_handler(void) {
         }
 
     }
-
-//    volatile int h_km = ((distance_meter / 100000) % 10);
-//    volatile int ten_km = ((distance_meter - h_km * 100000) / 10000) % 10;
-//    volatile int one_km = ((distance_meter - ten_km * 10000) / 1000) % 10;
-//    volatile int h_m = ((distance_meter - one_km * 1000) / 100) % 10;
-//    volatile int ten_m = ((distance_meter - h_m * 100) / 10) % 10;
-//    clear_display(meter_frame);
-//    write_scaled_arr(5, 6, &NUMBER[h_km], 94, 10);
-//    write_scaled_arr(5, 6, &NUMBER[ten_km], 124, 10);
-//    write_scaled_arr(5, 6, &NUMBER[one_km], 154, 10);
-//    write_scaled_arr(5, 6, &NUMBER[h_m], 184, 10);
-//    write_scaled_arr(5, 6, &NUMBER[ten_m], 210, 10);
 
     curdirection = direction;
 }
@@ -607,7 +609,7 @@ int main(void) {
     SysTickIntEnable();
     SysTickEnable();
     SysTickIntRegister(systick_handler);
-    SysTickPeriodSet((ticks_per_sec / 100)); // periodic call 10/s
+    SysTickPeriodSet((ticks_per_sec / 100)); // periodic call: 10/s
 
 
     while (1) {
