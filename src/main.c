@@ -30,12 +30,14 @@
 #define BACKGROUND_COLOR    0x00
 #define FRAME_COLOR         0xFF
 #define OFFSET                5
+#define CLOCK_FREQUENCY     25000000
 
 //#############################################################################
 // GLOBAL / Typedef
 //#############################################################################
 static volatile int distance_meter = 0 + OFFSET;
 static volatile int measure_call_cnt_velo = 0;
+volatile uint32_t time_since_last_call = 0;
 
 struct frame_t {
     unsigned int start_x;
@@ -490,8 +492,8 @@ void s1_event_handler(void) {
 
     // stop timer, get value, reset and start again
     TimerDisable(TIMER0_BASE, TIMER_A);
-    static int time_since_last_call = TimerValueGet(TIMER0_BASE, TIMER_A);
-    TimerLoadSet(TIMER0_BASE, TIMER_A, 25000000); // reset Timer
+    time_since_last_call = TimerValueGet(TIMER0_BASE, TIMER_A);
+    TimerLoadSet(TIMER0_BASE, TIMER_A, CLOCK_FREQUENCY); // reset Timer
     TimerEnable(TIMER0_BASE, TIMER_A);
 
     if (GPIOPinRead(GPIO_PORTP_BASE, GPIO_INT_PIN_1) == 2) {
@@ -513,7 +515,7 @@ void systick_handler(void) {
     //update display
     static volatile bool curdirection;
 
-    double velocity = (1 / 0.1) * (double) measure_call_cnt_velo * 3.6;
+    double velocity = (time_since_last_call/CLOCK_FREQUENCY)*400;
 
     draw_line(calculate_pointer(velocity));
     measure_call_cnt_velo = 0;
@@ -528,17 +530,17 @@ void systick_handler(void) {
 
     }
 
-    volatile int h_km = ((distance_meter / 100000) % 10);
-    volatile int ten_km = ((distance_meter - h_km * 100000) / 10000) % 10;
-    volatile int one_km = ((distance_meter - ten_km * 10000) / 1000) % 10;
-    volatile int h_m = ((distance_meter - one_km * 1000) / 100) % 10;
-    volatile int ten_m = ((distance_meter - h_m * 100) / 10) % 10;
-    clear_display(meter_frame);
-    write_scaled_arr(5, 6, &NUMBER[h_km], 94, 10);
-    write_scaled_arr(5, 6, &NUMBER[ten_km], 124, 10);
-    write_scaled_arr(5, 6, &NUMBER[one_km], 154, 10);
-    write_scaled_arr(5, 6, &NUMBER[h_m], 184, 10);
-    write_scaled_arr(5, 6, &NUMBER[ten_m], 210, 10);
+//    volatile int h_km = ((distance_meter / 100000) % 10);
+//    volatile int ten_km = ((distance_meter - h_km * 100000) / 10000) % 10;
+//    volatile int one_km = ((distance_meter - ten_km * 10000) / 1000) % 10;
+//    volatile int h_m = ((distance_meter - one_km * 1000) / 100) % 10;
+//    volatile int ten_m = ((distance_meter - h_m * 100) / 10) % 10;
+//    clear_display(meter_frame);
+//    write_scaled_arr(5, 6, &NUMBER[h_km], 94, 10);
+//    write_scaled_arr(5, 6, &NUMBER[ten_km], 124, 10);
+//    write_scaled_arr(5, 6, &NUMBER[one_km], 154, 10);
+//    write_scaled_arr(5, 6, &NUMBER[h_m], 184, 10);
+//    write_scaled_arr(5, 6, &NUMBER[ten_m], 210, 10);
 
     curdirection = direction;
 }
@@ -552,7 +554,7 @@ int main(void) {
     int ticks_per_sec = SysCtlClockFreqSet((SYSCTL_XTAL_25MHZ |
                                             SYSCTL_OSC_MAIN |
                                             SYSCTL_USE_PLL |
-                                            SYSCTL_CFG_VCO_480), 25000000);
+                                            SYSCTL_CFG_VCO_480), CLOCK_FREQUENCY);
 
     //Port  Clock Gating Control
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOM);
@@ -566,7 +568,7 @@ int main(void) {
     // Timer Init
     TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC_UP);
     // e.g: 120MHz / 120k = 1000 kHz : 120MHz / 120M = 1Hz
-    TimerLoadSet(TIMER0_BASE, TIMER_A, 25000000); // 1Hz
+    TimerLoadSet(TIMER0_BASE, TIMER_A, CLOCK_FREQUENCY); // 1Hz
     TimerEnable(TIMER0_BASE, TIMER_A);
 
     //Set Direction
