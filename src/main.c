@@ -41,6 +41,10 @@ static volatile int distance_meter = 0 + OFFSET;
 static volatile int measure_call_cnt_velo = 0;
 volatile uint32_t time_since_last_call = 0;
 
+static struct sema_t {
+    bool lock = true;
+} write_lock;
+
 struct frame_t {
     unsigned int start_x;
     unsigned int end_x;
@@ -116,7 +120,23 @@ char NUMBER[10][5][5] = {{{0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {1, 0, 0, 1,
 //#############################################################################
 // Helper functions
 //#############################################################################
+static bool lock(void){
+    if (write_lock.lock) {
+        write_lock.lock--;
+        return true;
+    } else {
+        return false;
+    }
+}
 
+static bool unlock(void){
+    if (write_lock.lock) {
+        write_lock.lock++;
+        return true;
+    } else {
+        return false;
+    }
+}
 /**
  * helper class, returns full initilized struct
  * @param start_x
@@ -180,21 +200,23 @@ struct frame_t calculate_pointer(double velocity) {
  * @param command as hex value
  */
 void write_command(unsigned char command) {
-    //Ausgang von gesamt Port L wird auf 0x1F gesetzt,
-    GPIOPinWrite(GPIO_PORTL_BASE, OUTPUT_L, 0x1F);
 
-    // Cs = 0  --> Chip select signal
-    // DISPLAY_RS = 0  --> Command mode
-    // DISPLAY_WR = 0  --> write enable
-    GPIOPinWrite(GPIO_PORTL_BASE, (SELECT_AND_WRITE | DISPLAY_RS), 0x00);
+    if(lock()){
+        //Ausgang von gesamt Port L wird auf 0x1F gesetzt,
+        GPIOPinWrite(GPIO_PORTL_BASE, OUTPUT_L, 0x1F);
 
-    //Port M Ausgabe von Command (var)
-    GPIOPinWrite(GPIO_PORTM_BASE, OUTPUT_M, command);
+        // Cs = 0  --> Chip select signal
+        // DISPLAY_RS = 0  --> Command mode
+        // DISPLAY_WR = 0  --> write enable
+        GPIOPinWrite(GPIO_PORTL_BASE, (SELECT_AND_WRITE | DISPLAY_RS), 0x00);
 
-    // DISPLAY_WR = 1  --> write disable
-    // DISPLAY_CS = 1  --> no Chip select signal
-    GPIOPinWrite(GPIO_PORTL_BASE, SELECT_AND_WRITE, 0xFF); // 0xFF represents logical 1 on all pins
+        //Port M Ausgabe von Command (var)
+        GPIOPinWrite(GPIO_PORTM_BASE, OUTPUT_M, command);
 
+        // DISPLAY_WR = 1  --> write disable
+        // DISPLAY_CS = 1  --> no Chip select signal
+        GPIOPinWrite(GPIO_PORTL_BASE, SELECT_AND_WRITE, 0xFF); // 0xFF represents logical 1 on all pins
+    }
 }
 
 /**
@@ -507,6 +529,7 @@ void s1_event_handler(void) {
         direction = BACKWARD;
     }
 
+    volatile struct frame_t meter_frame = get_frame(80, 250, 0, 50);
     volatile uint32_t h_km = ((distance_meter / 100000) % 10);
     volatile uint32_t ten_km = ((distance_meter - h_km * 100000) / 10000) % 10;
     volatile uint32_t one_km = ((distance_meter - ten_km * 10000) / 1000) % 10;
@@ -528,7 +551,6 @@ void systick_handler(void) {
 
     toggle_gpio();
     volatile struct frame_t direction_frame = get_frame(403, 479, 71, 270);
-    volatile struct frame_t meter_frame = get_frame(80, 250, 0, 50);
     //update display
     static volatile bool curdirection;
 
