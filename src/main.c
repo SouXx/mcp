@@ -122,7 +122,7 @@ char NUMBER[10][5][5] = {{{0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {1, 0, 0, 1,
 //#############################################################################
 static bool lock(void){
     if (write_lock.lock) {
-        write_lock.lock--;
+        write_lock.lock = false;
         return true;
     } else {
         return false;
@@ -131,11 +131,18 @@ static bool lock(void){
 
 static bool unlock(void){
     if (write_lock.lock) {
-        write_lock.lock++;
+        write_lock.lock = true;
         return true;
     } else {
         return false;
     }
+}
+
+bool check_lock(void){
+    if (write_lock.lock) {
+        return true;
+    }
+    return false;
 }
 /**
  * helper class, returns full initilized struct
@@ -201,7 +208,8 @@ struct frame_t calculate_pointer(double velocity) {
  */
 void write_command(unsigned char command) {
 
-    if(lock()){
+    if(check_lock()){
+        lock();
         //Ausgang von gesamt Port L wird auf 0x1F gesetzt,
         GPIOPinWrite(GPIO_PORTL_BASE, OUTPUT_L, 0x1F);
 
@@ -216,6 +224,7 @@ void write_command(unsigned char command) {
         // DISPLAY_WR = 1  --> write disable
         // DISPLAY_CS = 1  --> no Chip select signal
         GPIOPinWrite(GPIO_PORTL_BASE, SELECT_AND_WRITE, 0xFF); // 0xFF represents logical 1 on all pins
+        unlock();
     }
 }
 
