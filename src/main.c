@@ -17,6 +17,7 @@
 #include "../tiva/utils/uartstdio.h"
 
 
+
 //#############################################################################
 // Defines
 //#############################################################################
@@ -126,7 +127,7 @@ void init_semaphore(struct semaphore_t *semaphore, int v) {
 
 void lock_semaphore(struct semaphore_t *semaphore) {
     semaphore->counter--;
-    if (semaphore->counter <= 0) {
+    if (semaphore->counter < 0) {
         while (semaphore->counter <= 0) {}
     }
 }
@@ -135,21 +136,6 @@ void unlock_semaphore(struct semaphore_t *semaphore) {
     semaphore->counter++;
 }
 
-static bool unlock(void) {
-    if (write_lock.lock) {
-        write_lock.lock = true;
-        return true;
-    } else {
-        return false;
-    }
-}
-
-bool check_lock(void) {
-    if (write_lock.lock) {
-        return true;
-    }
-    return false;
-}
 
 /**
  * helper class, returns full initilized struct
@@ -191,7 +177,7 @@ void wait(void) {
     };
 }
 
-struct frame_t calculate_pointer(double velocity) {
+struct frame_t calculate_pointer(int velocity) {
     double radius = 200;
     double rad = 3.14 * (velocity / 400);
     double gk = sin(rad) * radius;
@@ -215,7 +201,7 @@ struct frame_t calculate_pointer(double velocity) {
  */
 void write_command(unsigned char command) {
 
-    lock_semaphore(semaphore);
+    lock_semaphore(&semaphore);
     //Ausgang von gesamt Port L wird auf 0x1F gesetzt,
     GPIOPinWrite(GPIO_PORTL_BASE, OUTPUT_L, 0x1F);
 
@@ -230,7 +216,7 @@ void write_command(unsigned char command) {
     // DISPLAY_WR = 1  --> write disable
     // DISPLAY_CS = 1  --> no Chip select signal
     GPIOPinWrite(GPIO_PORTL_BASE, SELECT_AND_WRITE, 0xFF); // 0xFF represents logical 1 on all pins
-    unlock_semaphore(semaphore);
+    unlock_semaphore(&semaphore);
 
 }
 
@@ -239,7 +225,7 @@ void write_command(unsigned char command) {
  * @param data as hex value
  */
 void write_data(unsigned char data) {
-    lock_semaphore(semaphore);
+    lock_semaphore(&semaphore);
     //Ausgang von gesamt Port L wird auf 0x1F gesetzt,
     GPIOPinWrite(GPIO_PORTL_BASE, OUTPUT_L, 0x1F);
 
@@ -255,7 +241,7 @@ void write_data(unsigned char data) {
     // DISPLAY_WR = 1  --> write disable
     // DISPLAY_CS = 1  --> no Chip select signal
     GPIOPinWrite(GPIO_PORTL_BASE, SELECT_AND_WRITE, 0xFF);
-    unlock_semaphore(semaphore);
+    unlock_semaphore(&semaphore);
 }
 
 /**
@@ -526,19 +512,23 @@ void draw_circle(int x0, int y0, int radius) {
 //#############################################################################
 
 void s1_event_handler(void) {
-    IntMasterDisable();
+    //IntMasterDisable();
     distance_meter++;
     measure_call_cnt_velo++;
 
     // stop timer, get value, reset and start again
     TimerDisable(TIMER0_BASE, TIMER_A);
-    time_since_last_call = TimerValueGet(TIMER0_BASE, TIMER_A);
-    TimerLoadSet(TIMER0_BASE, TIMER_A, CLOCK_FREQUENCY); // reset Timer
+    time_since_last_call =  HWREG(TIMER0_BASE + TIMER_O_TAV);
+    HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
     TimerEnable(TIMER0_BASE, TIMER_A);
 
+    //double tmp = (((double)time_since_last_call) /);
 
-    double velocity = ((double) time_since_last_call / (double) CLOCK_FREQUENCY) * (400.0 / 3.6);
+    double velocity =  (((double) CLOCK_FREQUENCY * (3.6))/ time_since_last_call);
     draw_line(calculate_pointer(velocity));
+    printf("t: %i \n", time_since_last_call);
+    printf("v: %f \n", velocity);
+
 
     if (GPIOPinRead(GPIO_PORTP_BASE, GPIO_INT_PIN_1) == 2) {
         direction = FORWARD;
@@ -546,22 +536,8 @@ void s1_event_handler(void) {
         direction = BACKWARD;
     }
 
-    volatile struct frame_t meter_frame = get_frame(80, 250, 0, 50);
-    volatile uint32_t h_km = ((distance_meter / 100000) % 10);
-    volatile uint32_t ten_km = ((distance_meter - h_km * 100000) / 10000) % 10;
-    volatile uint32_t one_km = ((distance_meter - ten_km * 10000) / 1000) % 10;
-    volatile uint32_t h_m = ((distance_meter - one_km * 1000) / 100) % 10;
-    volatile uint32_t ten_m = ((distance_meter - h_m * 100) / 10) % 10;
-    clear_display(meter_frame);
-    write_scaled_arr(5, 6, &NUMBER[h_km], 94, 10);
-    write_scaled_arr(5, 6, &NUMBER[ten_km], 124, 10);
-    write_scaled_arr(5, 6, &NUMBER[one_km], 154, 10);
-    write_scaled_arr(5, 6, &NUMBER[h_m], 184, 10);
-    write_scaled_arr(5, 6, &NUMBER[ten_m], 210, 10);
-
     GPIOIntClear(GPIO_PORTP_BASE, GPIO_INT_PIN_0);
-    IntMasterEnable();
-
+    //IntMasterEnable();
 }
 
 void systick_handler(void) {
@@ -570,7 +546,6 @@ void systick_handler(void) {
     volatile struct frame_t direction_frame = get_frame(403, 479, 71, 270);
     //update display
     static volatile bool curdirection;
-
 
     measure_call_cnt_velo = 0;
     if (curdirection != direction) {
@@ -583,6 +558,20 @@ void systick_handler(void) {
         }
 
     }
+/*
+    volatile struct frame_t meter_frame = get_frame(80, 250, 0, 50);
+    volatile uint32_t h_km = ((distance_meter / 100000) % 10);
+    volatile uint32_t ten_km = ((distance_meter - h_km * 100000) / 10000) % 10;
+    volatile uint32_t one_km = ((distance_meter - ten_km * 10000) / 1000) % 10;
+    volatile uint32_t h_m = ((distance_meter - one_km * 1000) / 100) % 10;
+    volatile uint32_t ten_m = ((distance_meter - h_m * 100) / 10) % 10;
+    clear_display(meter_frame);
+    write_scaled_arr(5, 6, &NUMBER[h_km], 94, 10);
+    write_scaled_arr(5, 6, &NUMBER[ten_km], 124, 10);
+    write_scaled_arr(5, 6, &NUMBER[one_km], 154, 10);
+    write_scaled_arr(5, 6, &NUMBER[h_m], 184, 10);
+    write_scaled_arr(5, 6, &NUMBER[ten_m], 210, 10);
+*/
 
     curdirection = direction;
 }
@@ -597,7 +586,7 @@ int main(void) {
                                             SYSCTL_OSC_MAIN |
                                             SYSCTL_USE_PLL |
                                             SYSCTL_CFG_VCO_480), CLOCK_FREQUENCY);
-    // Init Global Static sema
+    // Init Global Static semaphore
     init_semaphore(&semaphore, 1);
 
     //Port  Clock Gating Control
@@ -610,9 +599,8 @@ int main(void) {
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOK);
 
     // Timer Init
-    TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC_UP);
-    // e.g: 120MHz / 120k = 1000 kHz : 120MHz / 120M = 1Hz
-    TimerLoadSet(TIMER0_BASE, TIMER_A, CLOCK_FREQUENCY); // 1Hz
+    TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC_UP); // 32bit period up mode
+    HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
     TimerEnable(TIMER0_BASE, TIMER_A);
 
     //Set Direction
@@ -651,9 +639,10 @@ int main(void) {
     SysTickIntEnable();
     SysTickEnable();
     SysTickIntRegister(systick_handler);
-    SysTickPeriodSet((ticks_per_sec / 100)); // periodic call: 10/s
-    IntPrioritySet(FAULT_SYSTICK, 5);
+    SysTickPeriodSet((ticks_per_sec / 10)); // periodic call: 10/s
 
+    IntPrioritySet(FAULT_SYSTICK, 5);
+    IntPrioritySet(INT_GPIOP0_TM4C123,4);
 
     while (1) {
         // IDLE
