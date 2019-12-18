@@ -4,15 +4,17 @@
 
 #include "../tiva/inc/hw_memmap.h"
 #include "../tiva/inc/hw_types.h"
+#include "../tiva/inc/hw_ints.h"
 #include "../tiva/driverlib/debug.h"
+#include "../tiva/driverlib/interrupt.h"
 #include "../tiva/driverlib/gpio.h"
 #include "../tiva/driverlib/pin_map.h"
 #include "../tiva/driverlib/rom.h"
 #include "../tiva/driverlib/timer.h"
 #include "../tiva/driverlib/sysctl.h"
-#include "../tiva/utils/uartstdio.h"
 #include "../tiva/driverlib/uart.h"
 #include "../tiva/driverlib/timer.h"
+#include "../tiva/utils/uartstdio.h"
 
 
 //#############################################################################
@@ -610,6 +612,7 @@ int main(void) {
     SysTickEnable();
     SysTickIntRegister(systick_handler);
     SysTickPeriodSet((ticks_per_sec / 100)); // periodic call: 10/s
+    IntPrioritySet(FAULT_SYSTICK, 5);
 
 
     while (1) {
