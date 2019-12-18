@@ -2,15 +2,18 @@
 #include <stdbool.h>
 #include <math.h>
 
-#include "inc/hw_memmap.h"
-#include "inc/hw_types.h"
-#include "driverlib/debug.h"
-#include "driverlib/gpio.h"
-#include "driverlib/pin_map.h"
-#include "driverlib/rom.h"
-#include "driverlib/sysctl.h"
-#include "utils/uartstdio.h"
-#include "driverlib/uart.h"
+#include "../tiva/inc/hw_memmap.h"
+#include "../tiva/inc/hw_types.h"
+#include "../tiva/driverlib/debug.h"
+#include "../tiva/driverlib/gpio.h"
+#include "../tiva/driverlib/pin_map.h"
+#include "../tiva/driverlib/rom.h"
+#include "../tiva/driverlib/timer.h"
+#include "../tiva/driverlib/sysctl.h"
+#include "../tiva/utils/uartstdio.h"
+#include "../tiva/driverlib/uart.h"
+#include "../tiva/driverlib/timer.h"
+
 
 //#############################################################################
 // Defines
@@ -163,6 +166,7 @@ struct frame_t calculate_pointer(double velocity) {
     }
 
 }
+
 //#############################################################################
 // Display utilities
 //#############################################################################
@@ -272,6 +276,18 @@ void initialise_ssd1963(void) {
     write_data(0x00);
 
     write_command(0x29);
+}
+
+/**
+ * clears display within the given frame
+ * @param frame
+ */
+void clear_display(struct frame_t frame) {
+
+    window_set(frame);
+    draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y),
+                   BACKGROUND_COLOR);
+
 }
 
 //#############################################################################
@@ -424,18 +440,6 @@ void write_frame(void) {
 }
 
 /**
- * clears display within the given frame
- * @param frame
- */
-void clear_display(struct frame_t frame) {
-
-    window_set(frame);
-    draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y),
-                   BACKGROUND_COLOR);
-
-}
-
-/**
  * Bresenham's cricle draw algorithm
  * @param x0 circle center
  * @param y0 circle center
@@ -483,6 +487,12 @@ void s1_event_handler(void) {
     IntMasterDisable();
     distance_meter++;
     measure_call_cnt_velo++;
+
+    // stop timer, get value, reset and start again
+    TimerDisable(TIMER0_BASE, TIMER_A);
+    static int time_since_last_call = TimerValueGet(TIMER0_BASE, TIMER_A);
+    TimerLoadSet(TIMER0_BASE, TIMER_A, 25000000); // reset Timer
+    TimerEnable(TIMER0_BASE, TIMER_A);
 
     if (GPIOPinRead(GPIO_PORTP_BASE, GPIO_INT_PIN_1) == 2) {
         direction = FORWARD;
@@ -542,13 +552,22 @@ int main(void) {
     int ticks_per_sec = SysCtlClockFreqSet((SYSCTL_XTAL_25MHZ |
                                             SYSCTL_OSC_MAIN |
                                             SYSCTL_USE_PLL |
-                                            SYSCTL_CFG_VCO_480), 120000000);
+                                            SYSCTL_CFG_VCO_480), 25000000);
 
     //Port  Clock Gating Control
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOM);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOL);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOP);
+    //Timer
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
+    // debug measure pin
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOK);
+
+    // Timer Init
+    TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC_UP);
+    // e.g: 120MHz / 120k = 1000 kHz : 120MHz / 120M = 1Hz
+    TimerLoadSet(TIMER0_BASE, TIMER_A, 25000000); // 1Hz
+    TimerEnable(TIMER0_BASE, TIMER_A);
 
     //Set Direction
     GPIOPinTypeGPIOOutput(GPIO_PORTL_BASE, (OUTPUT_L | GPIO_PIN_5));
@@ -586,7 +605,7 @@ int main(void) {
     SysTickIntEnable();
     SysTickEnable();
     SysTickIntRegister(systick_handler);
-    SysTickPeriodSet((ticks_per_sec / 0.1));
+    SysTickPeriodSet((ticks_per_sec / 100)); // periodic call 10/s
 
 
     while (1) {
