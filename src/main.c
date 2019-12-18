@@ -41,9 +41,9 @@ static volatile int distance_meter = 0 + OFFSET;
 static volatile int measure_call_cnt_velo = 0;
 volatile uint32_t time_since_last_call = 0;
 
-static struct sema_t {
-    bool lock = true;
-} write_lock;
+static struct semaphore_t {
+    int counter;
+} semaphore;
 
 struct frame_t {
     unsigned int start_x;
@@ -120,16 +120,22 @@ char NUMBER[10][5][5] = {{{0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {1, 0, 0, 1,
 //#############################################################################
 // Helper functions
 //#############################################################################
-static bool lock(void){
-    if (write_lock.lock) {
-        write_lock.lock = false;
-        return true;
-    } else {
-        return false;
+void init_semaphore(struct semaphore_t *semaphore, int v) {
+    semaphore->counter = v;
+}
+
+void lock_semaphore(struct semaphore_t *semaphore) {
+    semaphore->counter--;
+    if (semaphore->counter <= 0) {
+        while (semaphore->counter <= 0) {}
     }
 }
 
-static bool unlock(void){
+void unlock_semaphore(struct semaphore_t *semaphore) {
+    semaphore->counter++;
+}
+
+static bool unlock(void) {
     if (write_lock.lock) {
         write_lock.lock = true;
         return true;
@@ -138,12 +144,13 @@ static bool unlock(void){
     }
 }
 
-bool check_lock(void){
+bool check_lock(void) {
     if (write_lock.lock) {
         return true;
     }
     return false;
 }
+
 /**
  * helper class, returns full initilized struct
  * @param start_x
@@ -208,24 +215,23 @@ struct frame_t calculate_pointer(double velocity) {
  */
 void write_command(unsigned char command) {
 
-    if(check_lock()){
-        lock();
-        //Ausgang von gesamt Port L wird auf 0x1F gesetzt,
-        GPIOPinWrite(GPIO_PORTL_BASE, OUTPUT_L, 0x1F);
+    lock_semaphore(semaphore);
+    //Ausgang von gesamt Port L wird auf 0x1F gesetzt,
+    GPIOPinWrite(GPIO_PORTL_BASE, OUTPUT_L, 0x1F);
 
-        // Cs = 0  --> Chip select signal
-        // DISPLAY_RS = 0  --> Command mode
-        // DISPLAY_WR = 0  --> write enable
-        GPIOPinWrite(GPIO_PORTL_BASE, (SELECT_AND_WRITE | DISPLAY_RS), 0x00);
+    // Cs = 0  --> Chip select signal
+    // DISPLAY_RS = 0  --> Command mode
+    // DISPLAY_WR = 0  --> write enable
+    GPIOPinWrite(GPIO_PORTL_BASE, (SELECT_AND_WRITE | DISPLAY_RS), 0x00);
 
-        //Port M Ausgabe von Command (var)
-        GPIOPinWrite(GPIO_PORTM_BASE, OUTPUT_M, command);
+    //Port M Ausgabe von Command (var)
+    GPIOPinWrite(GPIO_PORTM_BASE, OUTPUT_M, command);
 
-        // DISPLAY_WR = 1  --> write disable
-        // DISPLAY_CS = 1  --> no Chip select signal
-        GPIOPinWrite(GPIO_PORTL_BASE, SELECT_AND_WRITE, 0xFF); // 0xFF represents logical 1 on all pins
-        unlock();
-    }
+    // DISPLAY_WR = 1  --> write disable
+    // DISPLAY_CS = 1  --> no Chip select signal
+    GPIOPinWrite(GPIO_PORTL_BASE, SELECT_AND_WRITE, 0xFF); // 0xFF represents logical 1 on all pins
+    unlock_semaphore(semaphore);
+
 }
 
 /**
@@ -233,6 +239,7 @@ void write_command(unsigned char command) {
  * @param data as hex value
  */
 void write_data(unsigned char data) {
+    lock_semaphore(semaphore);
     //Ausgang von gesamt Port L wird auf 0x1F gesetzt,
     GPIOPinWrite(GPIO_PORTL_BASE, OUTPUT_L, 0x1F);
 
@@ -248,7 +255,7 @@ void write_data(unsigned char data) {
     // DISPLAY_WR = 1  --> write disable
     // DISPLAY_CS = 1  --> no Chip select signal
     GPIOPinWrite(GPIO_PORTL_BASE, SELECT_AND_WRITE, 0xFF);
-
+    unlock_semaphore(semaphore);
 }
 
 /**
@@ -530,7 +537,8 @@ void s1_event_handler(void) {
     TimerEnable(TIMER0_BASE, TIMER_A);
 
 
-    double velocity = ((double)time_since_last_call/(double)CLOCK_FREQUENCY)*(400.0/3.6);
+    double velocity = ((double) time_since_last_call / (double) CLOCK_FREQUENCY) * (400.0 / 3.6);
+    draw_line(calculate_pointer(velocity));
 
     if (GPIOPinRead(GPIO_PORTP_BASE, GPIO_INT_PIN_1) == 2) {
         direction = FORWARD;
@@ -564,7 +572,6 @@ void systick_handler(void) {
     static volatile bool curdirection;
 
 
-    draw_line(calculate_pointer(velocity));
     measure_call_cnt_velo = 0;
     if (curdirection != direction) {
         if (direction == BACKWARD) {
@@ -590,6 +597,8 @@ int main(void) {
                                             SYSCTL_OSC_MAIN |
                                             SYSCTL_USE_PLL |
                                             SYSCTL_CFG_VCO_480), CLOCK_FREQUENCY);
+    // Init Global Static sema
+    init_semaphore(&semaphore, 1);
 
     //Port  Clock Gating Control
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOM);
