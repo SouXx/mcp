@@ -575,22 +575,6 @@ void systick_handler(void) {
     // draw analog speed
     refresh_line(calculate_pointer(velocity), calculate_pointer(old_velocity));
     old_velocity = velocity;
-
-/*
-    volatile struct frame_t meter_frame = get_frame(80, 250, 0, 50);
-    volatile uint32_t h_km = ((distance_meter / 100000) % 10);
-    volatile uint32_t ten_km = ((distance_meter - h_km * 100000) / 10000) % 10;
-    volatile uint32_t one_km = ((distance_meter - ten_km * 10000) / 1000) % 10;
-    volatile uint32_t h_m = ((distance_meter - one_km * 1000) / 100) % 10;
-    volatile uint32_t ten_m = ((distance_meter - h_m * 100) / 10) % 10;
-    clear_display(meter_frame);
-    write_scaled_arr(5, 6, &NUMBER[h_km], 94, 10);
-    write_scaled_arr(5, 6, &NUMBER[ten_km], 124, 10);
-    write_scaled_arr(5, 6, &NUMBER[one_km], 154, 10);
-    write_scaled_arr(5, 6, &NUMBER[h_m], 184, 10);
-    write_scaled_arr(5, 6, &NUMBER[ten_m], 210, 10);
-*/
-
     curdirection = direction;
 }
 
@@ -630,12 +614,13 @@ int main(void) {
     //Timer0
     TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC_UP); // 32bit period up mode
     HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
-    TimerEnable(TIMER0_BASE, TIMER_A);
     TimerIntRegister(TIMER0_BASE, TIMER_A, timer1_watchdog_handler);
     TimerIntEnable(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
+    TimerEnable(TIMER0_BASE, TIMER_A);
 
     //Timer1
-    TimerConfigure(TIMER1_BASE, TIMER_CFG_A_PERIODIC);
+    TimerConfigure(TIMER1_BASE, TIMER_CFG_PERIODIC); // 32bit periodic down mode
+    HWREG(TIMER1_BASE + TIMER_1_TAV) = 500000;
     TimerIntRegister(TIMER1_BASE, TIMER_A, timer1_draw_handler);
     TimerIntEnable(TIMER1_BASE, TIMER_TIMA_TIMEOUT);
     TimerEnable(TIMER1_BASE, TIMER_A);
