@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <math.h>
+#include "symbols.h"
 #include "mpp1.h"
 
 //#############################################################################
@@ -359,7 +360,7 @@ void draw_pixel(unsigned int curr_x, unsigned int curr_y, unsigned char color) {
     write_data(color);
 }
 
-void refresh_line(struct frame_t frame, struct frame_t old_frame){
+void refresh_line(struct frame_t frame, struct frame_t old_frame) {
     frame.bg_color = FRAME_COLOR;
     old_frame.bg_color = BACKGROUND_COLOR;
 
@@ -410,6 +411,20 @@ void draw_rectangle(unsigned int delta_x, unsigned int delta_y,
             write_data(color);
             write_data(color);
             write_data(color);
+        }
+    }
+}
+
+
+void write_array(char symbol_arr[30][30], int x_start, int y_start) {
+    int x;
+    int y;
+
+    for (x = 0; x <= 30; ++x) {
+        for (y = 0; y <= 30; ++y) {
+            if (symbol_arr[x][y] == 1) {
+                draw_pixel(x_start + x, y_start + y, FRAME_COLOR);
+            }
         }
     }
 }
@@ -524,7 +539,7 @@ void s1_event_handler(void) {
     volatile uint32_t time_since_last_call = HWREG(TIMER0_BASE + TIMER_O_TAV);
     HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
     TimerEnable(TIMER0_BASE, TIMER_A);
-    local_velocity = (SPEED_FACTOR/ time_since_last_call);
+    local_velocity = (SPEED_FACTOR / time_since_last_call);
 
     if (GPIOPinRead(GPIO_PORTP_BASE, GPIO_INT_PIN_1) == 2) {
         direction = FORWARD;
@@ -578,6 +593,14 @@ void systick_handler(void) {
 
     curdirection = direction;
 }
+
+void timer1_watchdog_handler(void) {
+    refresh_line(calculate_pointer(0), calculate_pointer(old_velocity));
+}
+
+void timer1_draw_handler(void) {
+    //draw draw
+}
 //#############################################################################
 // main
 //#############################################################################
@@ -598,13 +621,24 @@ int main(void) {
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOP);
     //Timer
     SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER1);
     // debug measure pin
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOK);
 
-    // Timer Init
+    //Timer Init
+
+    //Timer0
     TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC_UP); // 32bit period up mode
     HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
     TimerEnable(TIMER0_BASE, TIMER_A);
+    TimerIntRegister(TIMER0_BASE, TIMER_A, timer1_watchdog_handler);
+    TimerIntEnable(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
+
+    //Timer1
+    TimerConfigure(TIMER1_BASE, TIMER_CFG_A_PERIODIC);
+    TimerIntRegister(TIMER1_BASE, TIMER_A, timer1_draw_handler);
+    TimerIntEnable(TIMER1_BASE, TIMER_TIMA_TIMEOUT);
+    TimerEnable(TIMER1_BASE, TIMER_A);
 
     //Set Direction
     GPIOPinTypeGPIOOutput(GPIO_PORTL_BASE, (OUTPUT_L | GPIO_PIN_5));
