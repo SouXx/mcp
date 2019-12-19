@@ -638,10 +638,10 @@ int main(void) {
     draw_circle(240, 271, 199);
     draw_circle(240, 271, 198);
 
-    write_scaled_arr(5, 6, K, 10, 10);
-    write_scaled_arr(5, 6, M, 47, 10);
-    write_scaled_arr(5, 6, DP, 64, 10);
-    write_scaled_arr(8, 8, V, 410, 90);
+    write_array(k_symbol, 10, 10);
+    write_array(m_symbol, 47, 10);
+    write_array(dp_symbol, 64, 10);
+    write_array(v_symbol, 420, 10);
 
     IntMasterEnable();
 
