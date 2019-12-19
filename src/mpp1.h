@@ -7,7 +7,7 @@
 
 #include "../tiva/inc/hw_memmap.h"
 #include "../tiva/inc/hw_types.h"
-//#include "../tiva/inc/hw_ints.h"
+#include "../tiva/inc/hw_ints.h"
 #include "../tiva/driverlib/debug.h"
 #include "../tiva/driverlib/interrupt.h"
 #include "../tiva/driverlib/gpio.h"

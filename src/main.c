@@ -18,24 +18,35 @@
 #define SELECT_AND_WRITE    (DISPLAY_CS | DISPLAY_WR)
 #define BACKGROUND_COLOR    0x00
 #define FRAME_COLOR         0xFF
-#define OFFSET                5
+#define OFFSET              5
 #define CLOCK_FREQUENCY     25000000
-
-// due to cycle dependency redefine
-// hw_ints.h
 
 #define FAULT_SYSTICK       15
 #define INT_GPIOP0_TM4C123  123
+#define INT_TIMER1A_TM4C123 37          // 16/32-Bit Timer 1A
 
 #define SPEED_FACTOR        ((double) CLOCK_FREQUENCY * (3.6))
 
 //#############################################################################
-// GLOBAL / Typedef
+// GLOBAL / Typedefs
 //#############################################################################
+
 static volatile int distance_meter = 0 + OFFSET;
 static volatile int measure_call_cnt_velo = 0;
 static volatile double velocity = 0;
 static volatile double old_velocity = 0;
+static volatile bool check;
+static volatile struct frame_t meter_frame;
+static volatile struct frame_t whole_frame;
+static volatile struct frame_t tacho_frame;
+static volatile struct frame_t direction_frame;
+static volatile struct frame_t meter_frame;
+
+volatile uint32_t h_km;
+volatile uint32_t ten_km;
+volatile uint32_t one_km;
+volatile uint32_t h_m;
+volatile uint32_t ten_m;
 
 static struct semaphore_t {
     int counter;
@@ -55,83 +66,9 @@ enum dir {
 
 static volatile bool direction = FORWARD;
 
-char K[5][5] = {{1, 0, 0, 0, 1},
-                {1, 0, 0, 1, 0},
-                {1, 0, 1, 0, 0},
-                {1,
-                    1, 0, 1, 0},
-                {1, 0, 0, 0, 1}};
-
-char M[5][5] = {{1, 0, 0, 0, 1},
-                {1, 1, 0, 1, 1},
-                {1, 0, 1, 0, 1},
-                {1,
-                    0, 0, 0, 1},
-                {1, 0, 0, 0, 1}};
-
-char V[5][5] = {{1, 0, 0, 0, 1},
-                {1, 0, 0, 0, 1},
-                {0, 1, 0, 1, 0},
-                {0,
-                    1, 0, 1, 0},
-                {0, 0, 1, 0, 0}};
-
-char R[5][5] = {{1, 1, 1, 0, 0},
-                {1, 0, 0, 1, 0},
-                {1, 1, 1, 0, 0},
-                {1,
-                    0, 0, 1, 0},
-                {1, 0, 0, 0, 1}};
-
-char DP[5][5] = {{0, 0, 0, 0, 0},
-                 {0, 0, 1, 0, 0},
-                 {0, 0, 0, 0, 0},
-                 {0,
-                     0, 1, 0, 0},
-                 {0, 0, 0, 0, 0}};
-
-char NUMBER[10][5][5] = {{{0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {1, 0, 0, 1,
-                                                                         0}, {1, 0, 0, 1, 0}, {0, 1, 1, 0, 0}},
-                         {{0, 0, 1, 0, 0}, {0,
-                                               1, 1, 0, 0}, {0, 0, 1, 0, 0}, {0, 0, 1, 0, 0}, {0, 1, 1, 1, 0}},
-                         {{0, 1, 1, 0, 0}, {1, 0, 1, 0, 0}, {0, 0, 1, 0, 0}, {0, 1, 0, 1,
-                                                                                          0}, {1, 1, 1, 0, 0}},
-                         {{0, 1, 1, 0, 0},
-                                           {1, 0, 0, 1, 0}, {0, 0, 1, 0, 0}, {1, 0, 0, 1, 0}, {0, 1,
-                                                                                                     1, 0, 0}},
-                         {{1, 0, 0, 0, 0}, {1, 0, 1, 0, 0}, {
-                                                             1, 1, 1, 1, 0}, {0, 0, 1, 0, 0}, {0, 0, 1, 0, 0}},
-                         {{1,
-                              1, 1, 0, 0}, {1, 0, 0, 0, 0}, {1, 1, 0, 0, 0}, {0, 0, 1,
-                                                                                       0, 0}, {1, 1, 0, 0, 0}},
-                         {{0, 0, 1, 1, 0}, {0, 1, 0, 0,
-                                                        0}, {1, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {1, 1, 1, 0, 0}},
-                         {{1, 1, 1, 1, 0}, {0, 0, 0, 1, 0}, {0, 0, 1, 0, 0}, {0, 1, 0, 0,
-                                                                                          0}, {1, 0, 0, 0, 0}},
-                         {{0, 1, 1, 0, 0},
-                                           {1, 0, 0, 1, 0}, {0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {0, 1,
-                                                                                                     1, 0, 0}},
-                         {{0, 1, 1, 0, 0}, {1, 0, 0, 1, 0}, {
-                                                             0, 1, 1, 1, 0}, {0, 0, 0, 1, 0}, {0, 1, 1, 0, 0}}};
-
 //#############################################################################
 // Helper functions
 //#############################################################################
-void init_semaphore(struct semaphore_t *semaphore, int v) {
-    semaphore->counter = v;
-}
-
-void lock_semaphore(struct semaphore_t *semaphore) {
-    semaphore->counter--;
-    if (semaphore->counter < 0) {
-        while (semaphore->counter <= 0) {}
-    }
-}
-
-void unlock_semaphore(struct semaphore_t *semaphore) {
-    semaphore->counter++;
-}
-
 
 /**
  * helper class, returns full initilized struct
@@ -141,7 +78,6 @@ void unlock_semaphore(struct semaphore_t *semaphore) {
  * @param end_y
  * @return struct frame_t
  */
-
 static struct frame_t get_frame(unsigned int start_x, unsigned int end_x,
                                 unsigned int start_y, unsigned int end_y) {
 
@@ -164,7 +100,6 @@ void toggle_gpio() {
     tmp = !tmp;
 }
 
-
 void wait(void) {
 
     // TODO: refactor implementation
@@ -180,9 +115,9 @@ struct frame_t calculate_pointer(int velocity) {
     double ak = abs(cos(rad) * radius);
 
     if ((int) velocity < (int) 200) {
-        return get_frame(200, 200 - ak, 271, 271 - gk);
+        return get_frame(240, 240 - ak, 271, 271 - gk);
     } else {
-        return get_frame(200, 200 + ak, 271, 271 - gk);
+        return get_frame(240, 240 + ak, 271, 271 - gk);
     }
 }
 
@@ -196,7 +131,6 @@ struct frame_t calculate_pointer(int velocity) {
  */
 void write_command(unsigned char command) {
 
-//    lock_semaphore(&semaphore);
     //Ausgang von gesamt Port L wird auf 0x1F gesetzt,
     GPIOPinWrite(GPIO_PORTL_BASE, OUTPUT_L, 0x1F);
 
@@ -211,7 +145,6 @@ void write_command(unsigned char command) {
     // DISPLAY_WR = 1  --> write disable
     // DISPLAY_CS = 1  --> no Chip select signal
     GPIOPinWrite(GPIO_PORTL_BASE, SELECT_AND_WRITE, 0xFF); // 0xFF represents logical 1 on all pins
-//    unlock_semaphore(&semaphore);
 
 }
 
@@ -360,6 +293,11 @@ void draw_pixel(unsigned int curr_x, unsigned int curr_y, unsigned char color) {
     write_data(color);
 }
 
+/**
+ * refresh line
+ * @param frame
+ * @param old_frame
+ */
 void refresh_line(struct frame_t frame, struct frame_t old_frame) {
     frame.bg_color = FRAME_COLOR;
     old_frame.bg_color = BACKGROUND_COLOR;
@@ -368,6 +306,10 @@ void refresh_line(struct frame_t frame, struct frame_t old_frame) {
     draw_line(frame);
 }
 
+/**
+ * draws line
+ * @param frame
+ */
 void draw_line(struct frame_t frame) {
     int x0 = frame.start_x;
     int x1 = frame.end_x;
@@ -415,14 +357,19 @@ void draw_rectangle(unsigned int delta_x, unsigned int delta_y,
     }
 }
 
-
+/**
+ * write array to display
+ * @param symbol_arr
+ * @param x_start
+ * @param y_start
+ */
 void write_array(char symbol_arr[30][30], int x_start, int y_start) {
     int x;
     int y;
 
-    for (x = 0; x <= 30; ++x) {
-        for (y = 0; y <= 30; ++y) {
-            if (symbol_arr[x][y] == 1) {
+    for (y = 0; y <= 30; ++y) {
+        for (x = 0; x <= 30; ++x) {
+            if (symbol_arr[y][x] == 1) {
                 draw_pixel(x_start + x, y_start + y, FRAME_COLOR);
             }
         }
@@ -467,17 +414,26 @@ void write_frame(void) {
     struct frame_t frame;
     frame.start_x = 0;
     frame.end_x = 479;
-    frame.start_y = 68;
-    frame.end_y = 70;
+    frame.start_y = 48;
+    frame.end_y = 50;
 
     window_set(frame);
     draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y),
                    FRAME_COLOR);
 
-    frame.start_x = 400;
-    frame.end_x = 402;
-    frame.start_y = 70;
-    frame.end_y = 271;
+    frame.start_x = 415;
+    frame.end_x = 417;
+    frame.start_y = 0;
+    frame.end_y = 50;
+
+    window_set(frame);
+    draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y),
+                   FRAME_COLOR);
+
+    frame.start_x = 260;
+    frame.end_x = 262;
+    frame.start_y = 0;
+    frame.end_y = 50;
 
     window_set(frame);
     draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y),
@@ -527,103 +483,139 @@ void draw_circle(int x0, int y0, int radius) {
 //#############################################################################
 // Interrupt handler
 //#############################################################################
-
+/**
+ * signal handler
+ * task: measuring
+ */
 void s1_event_handler(void) {
-    //IntMasterDisable();
+
+    check = true;
     distance_meter++;
     measure_call_cnt_velo++;
-    static volatile uint32_t local_velocity;
 
-    // stop timer, get value, reset and start again
+    // Read TimerValue
     TimerDisable(TIMER0_BASE, TIMER_A);
     volatile uint32_t time_since_last_call = HWREG(TIMER0_BASE + TIMER_O_TAV);
     HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
     TimerEnable(TIMER0_BASE, TIMER_A);
-    local_velocity = (SPEED_FACTOR / time_since_last_call);
+    velocity = ((SPEED_FACTOR - 2500000.0) / time_since_last_call);
 
     if (GPIOPinRead(GPIO_PORTP_BASE, GPIO_INT_PIN_1) == 2) {
         direction = FORWARD;
     } else {
         direction = BACKWARD;
     }
-
-    // set global context
-    velocity = local_velocity;
-
     GPIOIntClear(GPIO_PORTP_BASE, GPIO_INT_PIN_0);
-    //IntMasterEnable();
 }
-
+/**
+ * calculate measurements
+ */
 void systick_handler(void) {
 
-    toggle_gpio();
-    volatile struct frame_t direction_frame = get_frame(403, 479, 71, 270);
-    //update display
-    static volatile bool curdirection;
+    // kilometer
+    h_km = ((distance_meter / 100000) % 10);
+    ten_km = ((distance_meter - h_km * 100000) / 10000) % 10;
+    one_km = ((distance_meter - ten_km * 10000) / 1000) % 10;
+    h_m = ((distance_meter - one_km * 1000) / 100) % 10;
+    ten_m = ((distance_meter - h_m * 100) / 10) % 10;
+}
 
-    measure_call_cnt_velo = 0;
+/**
+ * watchdog, catches velocity zero
+ * task: bring needle down to zero
+ */
+void timer1_watchdog_handler(void) {
+
+    check = false;
+    uint16_t velo = old_velocity;
+
+    for(velo; velo < 0; --velo){
+        refresh_line(calculate_pointer(velo), calculate_pointer(velo+1));
+    }
+
+    old_velocity = 0;
+    TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
+}
+
+/**
+ * responsible for output
+ */
+void timer1_draw_handler(void) {
+
+    IntMasterDisable();
+    static volatile bool curdirection;
+    uint32_t distance_meter_old;
+
+    // mileage output
+    if((distance_meter/10)%10 != (distance_meter_old/10)%10){
+        write_array(&numbers_symbols[h_km], 94, 10);
+        write_array(&numbers_symbols[ten_km], 124, 10);
+        write_array(&numbers_symbols[one_km], 154, 10);
+        write_array(&numbers_symbols[h_m], 184, 10);
+        write_array(&numbers_symbols[ten_m], 204, 10);
+        distance_meter_old = distance_meter;
+    }
+
+
+    if (check) {
+        // draw analog speed
+        refresh_line(calculate_pointer(velocity),
+                     calculate_pointer(old_velocity));
+        old_velocity = velocity;
+    }
+
     if (curdirection != direction) {
         if (direction == BACKWARD) {
             clear_display(direction_frame);
-            write_scaled_arr(8, 8, R, 410, 90);
+            write_array(symbol, 410, 90);
         } else {
             clear_display(direction_frame);
-            write_scaled_arr(8, 8, V, 410, 90);
+            write_array(symbol, 410, 90);
         }
-
+        curdirection = direction;
     }
-    // draw analog speed
-    refresh_line(calculate_pointer(velocity), calculate_pointer(old_velocity));
-    old_velocity = velocity;
-    curdirection = direction;
+    TimerIntClear(TIMER1_BASE, TIMER_TIMA_TIMEOUT);
+    IntMasterEnable();
 }
 
-void timer1_watchdog_handler(void) {
-    refresh_line(calculate_pointer(0), calculate_pointer(old_velocity));
-}
-
-void timer1_draw_handler(void) {
-    //draw draw
-}
 //#############################################################################
 // main
 //#############################################################################
 
 int main(void) {
 
-
     int ticks_per_sec = SysCtlClockFreqSet((SYSCTL_XTAL_25MHZ |
                                             SYSCTL_OSC_MAIN |
                                             SYSCTL_USE_PLL |
                                             SYSCTL_CFG_VCO_480), CLOCK_FREQUENCY);
-    // Init Global Static semaphore
-    init_semaphore(&semaphore, 1);
 
-    //Port  Clock Gating Control
+    //Init global values
+    meter_frame = get_frame(80, 250, 0, 50);
+    whole_frame = get_frame(0, 479, 0, 271);
+    tacho_frame = get_frame(0, 400, 70, 270);
+    direction_frame = get_frame(403, 479, 71, 270);
+    meter_frame = get_frame(80, 250, 0, 50);
+
+    //Port Clock Gating Control
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOM);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOL);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOP);
     //Timer
     SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER1);
-    // debug measure pin
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOK);
-
-    //Timer Init
 
     //Timer0
     TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC_UP); // 32bit period up mode
     HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
+    HWREG(TIMER0_BASE + TIMER_O_TAILR) = CLOCK_FREQUENCY; // 1sec
     TimerIntRegister(TIMER0_BASE, TIMER_A, timer1_watchdog_handler);
     TimerIntEnable(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
-    TimerEnable(TIMER0_BASE, TIMER_A);
 
     //Timer1
     TimerConfigure(TIMER1_BASE, TIMER_CFG_PERIODIC); // 32bit periodic down mode
-    HWREG(TIMER1_BASE + TIMER_1_TAV) = 500000;
+    HWREG(TIMER1_BASE + TIMER_O_TAILR) = 5000000;
     TimerIntRegister(TIMER1_BASE, TIMER_A, timer1_draw_handler);
     TimerIntEnable(TIMER1_BASE, TIMER_TIMA_TIMEOUT);
-    TimerEnable(TIMER1_BASE, TIMER_A);
 
     //Set Direction
     GPIOPinTypeGPIOOutput(GPIO_PORTL_BASE, (OUTPUT_L | GPIO_PIN_5));
@@ -638,17 +630,13 @@ int main(void) {
     GPIOIntTypeSet(GPIO_PORTP_BASE, GPIO_INT_PIN_0, GPIO_RISING_EDGE);
     GPIOIntEnable(GPIO_PORTP_BASE, GPIO_INT_PIN_0);
 
-    struct frame_t whole_frame = get_frame(0, 479, 0, 271);
-    struct frame_t tacho_frame = get_frame(0, 400, 70, 270);
-    struct frame_t direction_frame = get_frame(403, 479, 71, 270);
-    struct frame_t meter_frame = get_frame(80, 250, 0, 50);
-
     clear_display(whole_frame);
     write_frame();
 
     window_set(tacho_frame);
-    draw_circle(200, 271, 200);
-    draw_circle(200, 271, 199);
+    draw_circle(240, 271, 200);
+    draw_circle(240, 271, 199);
+    draw_circle(240, 271, 198);
 
     write_scaled_arr(5, 6, K, 10, 10);
     write_scaled_arr(5, 6, M, 47, 10);
@@ -657,14 +645,18 @@ int main(void) {
 
     IntMasterEnable();
 
-    //SysTick config
+    //SysTick Config
     SysTickIntEnable();
     SysTickEnable();
     SysTickIntRegister(systick_handler);
     SysTickPeriodSet((ticks_per_sec / 10)); // periodic call: 10/s
-
+    //Set Priorities
     IntPrioritySet(FAULT_SYSTICK, 5);
     IntPrioritySet(INT_GPIOP0_TM4C123, 4);
+    IntPrioritySet(INT_TIMER1A_TM4C123, 5);
+    //Start Timer
+    TimerEnable(TIMER0_BASE, TIMER_A);
+    TimerEnable(TIMER1_BASE, TIMER_A);
 
     while (1) {
         // IDLE
