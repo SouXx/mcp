@@ -171,8 +171,8 @@ void wait(void) {
 }
 
 struct frame_t calculate_pointer(int velocity) {
-    double radius = 200;
-    double rad = 3.14 * (velocity / 400);
+    double radius = 200.0;
+    double rad = 3.14 * (velocity / 400.0);
     double gk = sin(rad) * radius;
     double ak = abs(cos(rad) * radius);
 
@@ -181,7 +181,6 @@ struct frame_t calculate_pointer(int velocity) {
     } else {
         return get_frame(200, 200 + ak, 271, 271 - gk);
     }
-
 }
 
 //#############################################################################
@@ -512,7 +511,7 @@ void s1_event_handler(void) {
 
     // stop timer, get value, reset and start again
     TimerDisable(TIMER0_BASE, TIMER_A);
-    static volatile uint32_t time_since_last_call = HWREG(TIMER0_BASE + TIMER_O_TAV);
+    volatile uint32_t time_since_last_call = HWREG(TIMER0_BASE + TIMER_O_TAV);
     HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
     TimerEnable(TIMER0_BASE, TIMER_A);
     local_velocity = (SPEED_FACTOR/ time_since_last_call);
@@ -549,7 +548,9 @@ void systick_handler(void) {
 
     }
     // draw analog speed
-    draw_line(calculate_pointer(local_velocity));
+    draw_line(calculate_pointer(velocity));
+    framt_t last_frame = calculate_pointer(velocity);
+    clear_display(last_frame)
 /*
     volatile struct frame_t meter_frame = get_frame(80, 250, 0, 50);
     volatile uint32_t h_km = ((distance_meter / 100000) % 10);
