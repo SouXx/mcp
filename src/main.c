@@ -33,7 +33,8 @@
 //#############################################################################
 static volatile int distance_meter = 0 + OFFSET;
 static volatile int measure_call_cnt_velo = 0;
-static volatile double velocity;
+static volatile double velocity = 0;
+static volatile double old_velocity = 0;
 
 static struct semaphore_t {
     int counter;
@@ -44,6 +45,7 @@ struct frame_t {
     unsigned int end_x;
     unsigned int start_y;
     unsigned int end_y;
+    unsigned int bg_color;
 };
 
 enum dir {
@@ -193,7 +195,7 @@ struct frame_t calculate_pointer(int velocity) {
  */
 void write_command(unsigned char command) {
 
-    lock_semaphore(&semaphore);
+//    lock_semaphore(&semaphore);
     //Ausgang von gesamt Port L wird auf 0x1F gesetzt,
     GPIOPinWrite(GPIO_PORTL_BASE, OUTPUT_L, 0x1F);
 
@@ -208,7 +210,7 @@ void write_command(unsigned char command) {
     // DISPLAY_WR = 1  --> write disable
     // DISPLAY_CS = 1  --> no Chip select signal
     GPIOPinWrite(GPIO_PORTL_BASE, SELECT_AND_WRITE, 0xFF); // 0xFF represents logical 1 on all pins
-    unlock_semaphore(&semaphore);
+//    unlock_semaphore(&semaphore);
 
 }
 
@@ -217,7 +219,7 @@ void write_command(unsigned char command) {
  * @param data as hex value
  */
 void write_data(unsigned char data) {
-    lock_semaphore(&semaphore);
+//    lock_semaphore(&semaphore);
     //Ausgang von gesamt Port L wird auf 0x1F gesetzt,
     GPIOPinWrite(GPIO_PORTL_BASE, OUTPUT_L, 0x1F);
 
@@ -233,7 +235,7 @@ void write_data(unsigned char data) {
     // DISPLAY_WR = 1  --> write disable
     // DISPLAY_CS = 1  --> no Chip select signal
     GPIOPinWrite(GPIO_PORTL_BASE, SELECT_AND_WRITE, 0xFF);
-    unlock_semaphore(&semaphore);
+//    unlock_semaphore(&semaphore);
 }
 
 /**
@@ -357,6 +359,14 @@ void draw_pixel(unsigned int curr_x, unsigned int curr_y, unsigned char color) {
     write_data(color);
 }
 
+void refresh_line(struct frame_t frame, struct frame_t old_frame){
+    frame.bg_color = FRAME_COLOR;
+    old_frame.bg_color = BACKGROUND_COLOR;
+
+    draw_line(old_frame);
+    draw_line(frame);
+}
+
 void draw_line(struct frame_t frame) {
     int x0 = frame.start_x;
     int x1 = frame.end_x;
@@ -368,7 +378,7 @@ void draw_line(struct frame_t frame) {
     int err = dx + dy, e2; /* error value e_xy */
 
     while (1) {
-        draw_pixel(x0, y0, FRAME_COLOR);
+        draw_pixel(x0, y0, frame.bg_color);
         if (x0 == x1 && y0 == y1)
             break;
         e2 = 2 * err;
@@ -548,9 +558,9 @@ void systick_handler(void) {
 
     }
     // draw analog speed
-    draw_line(calculate_pointer(velocity));
-    framt_t last_frame = calculate_pointer(velocity);
-    clear_display(last_frame)
+    refresh_line(calculate_pointer(velocity), calculate_pointer(old_velocity));
+    old_velocity = velocity;
+
 /*
     volatile struct frame_t meter_frame = get_frame(80, 250, 0, 50);
     volatile uint32_t h_km = ((distance_meter / 100000) % 10);
