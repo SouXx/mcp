@@ -33,8 +33,7 @@
 //#############################################################################
 static volatile int distance_meter = 0 + OFFSET;
 static volatile int measure_call_cnt_velo = 0;
-volatile uint32_t time_since_last_call = 0;
-static volatile double *velocity;
+static volatile double velocity;
 
 static struct semaphore_t {
     int counter;
@@ -509,18 +508,20 @@ void s1_event_handler(void) {
     //IntMasterDisable();
     distance_meter++;
     measure_call_cnt_velo++;
+    static volatile uint32_t local_velocity;
+
 
     // stop timer, get value, reset and start again
     TimerDisable(TIMER0_BASE, TIMER_A);
-    time_since_last_call = HWREG(TIMER0_BASE + TIMER_O_TAV);
+    static volatile uint32_t time_since_last_call = HWREG(TIMER0_BASE + TIMER_O_TAV);
     HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
     TimerEnable(TIMER0_BASE, TIMER_A);
 
-    velocity = (SPEED_FACTOR/ time_since_last_call);
+    local_velocity = (SPEED_FACTOR/ time_since_last_call);
     printf("t: %i \n", time_since_last_call);
-    printf("v: %f \n", *velocity);
+    printf("v: %f \n", velocity);
     // draw analog speed
-    draw_line(calculate_pointer(velocity));
+    draw_line(calculate_pointer(local_velocity));
 
     if (GPIOPinRead(GPIO_PORTP_BASE, GPIO_INT_PIN_1) == 2) {
         direction = FORWARD;
