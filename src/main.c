@@ -49,6 +49,12 @@ static volatile uint32_t h_m;
 static volatile uint32_t ten_m;
 static volatile uint16_t co_mass;
 
+static volatile uint32_t h_km_old = 0;
+static volatile uint32_t ten_km_old = 0;
+static volatile uint32_t one_km_old = 0;
+static volatile uint32_t h_m_old = 0;
+static volatile uint32_t ten_m_old = 0;
+
 static struct semaphore_t {
     int counter;
 } semaphore;
@@ -110,7 +116,7 @@ void wait(void) {
 }
 
 struct frame_t calculate_pointer(int velocity) {
-    double radius = 200.0;
+    double radius = 197.0;
     double rad = 3.14 * (velocity / 400.0);
     double gk = sin(rad) * radius;
     double ak = abs(cos(rad) * radius);
@@ -247,6 +253,11 @@ void clear_display(struct frame_t frame) {
 
 }
 
+void clear_part(struct frame_t frame, void (*pf_draw)(void)){
+    window_set(frame);
+    pf_draw();
+}
+
 //#############################################################################
 // Drawing functions
 //#############################################################################
@@ -364,14 +375,14 @@ void draw_rectangle(unsigned int delta_x, unsigned int delta_y,
  * @param x_start
  * @param y_start
  */
-void write_array(char symbol_arr[30][30], int x_start, int y_start) {
+void write_array(char symbol_arr[30][30], int x_start, int y_start, int color) {
     int x;
     int y;
 
     for (y = 0; y <= 30; ++y) {
         for (x = 0; x <= 30; ++x) {
             if (symbol_arr[y][x] == 1) {
-                draw_pixel(x_start + x, y_start + y, FRAME_COLOR);
+                draw_pixel(x_start + x, y_start + y, color);
             }
         }
     }
@@ -532,7 +543,7 @@ void timer1_watchdog_handler(void) {
     check = false;
     uint16_t velo = old_velocity;
 
-    for(velo; velo < 0; --velo){
+    for(velo; velo == 0; --velo){
         refresh_line(calculate_pointer(velo), calculate_pointer(velo+1));
     }
 
@@ -552,13 +563,29 @@ void timer1_draw_handler(void) {
     // mileage output
     if((distance_meter/10)%10 != (distance_meter_old/10)%10){
         // TODO: CO Output
-        write_array(&numbers_symbols[h_km], 94, 10);
-        write_array(&numbers_symbols[ten_km], 124, 10);
-        write_array(&numbers_symbols[one_km], 154, 10);
-        write_array(&numbers_symbols[h_m], 184, 10);
-        write_array(&numbers_symbols[ten_m], 204, 10);
+        //clear_display(meter_frame);
+
+        write_array(&numbers_symbols[h_km_old], 94, 10, BACKGROUND_COLOR);
+        write_array(&numbers_symbols[ten_km_old], 124, 10, BACKGROUND_COLOR);
+        write_array(&numbers_symbols[one_km_old], 154, 10, BACKGROUND_COLOR);
+        write_array(&numbers_symbols[h_m_old], 184, 10, BACKGROUND_COLOR);
+        write_array(&numbers_symbols[ten_m_old], 214, 10, BACKGROUND_COLOR);
+
+        write_array(&numbers_symbols[h_km], 94, 10, FRAME_COLOR);
+        write_array(&numbers_symbols[ten_km], 124, 10, FRAME_COLOR);
+        write_array(&numbers_symbols[one_km], 154, 10, FRAME_COLOR);
+        write_array(&numbers_symbols[h_m], 184, 10, FRAME_COLOR);
+        write_array(&numbers_symbols[ten_m], 214, 10, FRAME_COLOR);
+
+        h_km_old = h_km;
+        ten_km_old = ten_km;
+        one_km_old = one_km;
+        h_m_old = h_m;
+        ten_m_old = ten_m;
+
         distance_meter_old = distance_meter;
     }
+
 
     if (check) {
         // draw analog speed
@@ -570,10 +597,10 @@ void timer1_draw_handler(void) {
     if (curdirection != direction) {
         if (direction == BACKWARD) {
             clear_display(direction_frame);
-            write_array(r_symbol, 410, 10);
+            write_array(r_symbol, 430, 10, FRAME_COLOR);
         } else {
             clear_display(direction_frame);
-            write_array(v_symbol, 410, 10);
+            write_array(v_symbol, 430, 10, FRAME_COLOR);
         }
         curdirection = direction;
     }
@@ -594,10 +621,10 @@ int main(void) {
 
     //Init global values
     whole_frame = get_frame(0, 479, 0, 271);
-    meter_frame = get_frame(80, 250, 0, 50);
+    meter_frame = get_frame(80, 250, 0, 45);
     tacho_frame = get_frame(0, 400, 70, 270);
-    direction_frame = get_frame(420, 479, 0, 70);
-    meter_frame = get_frame(80, 250, 0, 50);
+    direction_frame = get_frame(430, 479, 0,45);
+
 
     //Port Clock Gating Control
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOM);
@@ -623,7 +650,6 @@ int main(void) {
     //Set Direction
     GPIOPinTypeGPIOOutput(GPIO_PORTL_BASE, (OUTPUT_L | GPIO_PIN_5));
     GPIOPinTypeGPIOOutput(GPIO_PORTM_BASE, OUTPUT_M);
-    GPIOPinTypeGPIOOutput(GPIO_PORTK_BASE, GPIO_PIN_0);
     GPIOPinTypeGPIOInput(GPIO_PORTP_BASE, INPUT_P);
 
     initialise_ssd1963();
@@ -641,10 +667,10 @@ int main(void) {
     draw_circle(240, 271, 199);
     draw_circle(240, 271, 198);
 
-    write_array(k_symbol, 10, 10);
-    write_array(m_symbol, 47, 10);
-    write_array(dp_symbol, 64, 10);
-    write_array(v_symbol, 420, 10);
+    //write_array(k_symbol, 10, 10);
+    //write_array(m_symbol, 47, 10);
+    //write_array(dp_symbol, 64, 10);
+    write_array(v_symbol, 430, 10, FRAME_COLOR);
 
     IntMasterEnable();
 
