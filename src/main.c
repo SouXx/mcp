@@ -1,22 +1,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <math.h>
-
-#include "../tiva/inc/hw_memmap.h"
-#include "../tiva/inc/hw_types.h"
-#include "../tiva/inc/hw_ints.h"
-#include "../tiva/driverlib/debug.h"
-#include "../tiva/driverlib/interrupt.h"
-#include "../tiva/driverlib/gpio.h"
-#include "../tiva/driverlib/pin_map.h"
-#include "../tiva/driverlib/rom.h"
-#include "../tiva/driverlib/timer.h"
-#include "../tiva/driverlib/sysctl.h"
-#include "../tiva/driverlib/uart.h"
-#include "../tiva/driverlib/timer.h"
-#include "../tiva/utils/uartstdio.h"
-
-
+#include "mpp1.h"
 
 //#############################################################################
 // Defines
@@ -35,12 +20,19 @@
 #define OFFSET                5
 #define CLOCK_FREQUENCY     25000000
 
+// due to cycle dependency redefine
+// hw_ints.h
+
+#define FAULT_SYSTICK       15
+#define INT_GPIOP0_TM4C123  123
+
 //#############################################################################
 // GLOBAL / Typedef
 //#############################################################################
 static volatile int distance_meter = 0 + OFFSET;
 static volatile int measure_call_cnt_velo = 0;
 volatile uint32_t time_since_last_call = 0;
+volatile double velocity;
 
 static struct semaphore_t {
     int counter;
@@ -518,14 +510,13 @@ void s1_event_handler(void) {
 
     // stop timer, get value, reset and start again
     TimerDisable(TIMER0_BASE, TIMER_A);
-    time_since_last_call =  HWREG(TIMER0_BASE + TIMER_O_TAV);
+    time_since_last_call = HWREG(TIMER0_BASE + TIMER_O_TAV);
     HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
     TimerEnable(TIMER0_BASE, TIMER_A);
 
     //double tmp = (((double)time_since_last_call) /);
 
-    double velocity =  (((double) CLOCK_FREQUENCY * (3.6))/ time_since_last_call);
-    draw_line(calculate_pointer(velocity));
+    velocity = (((double) CLOCK_FREQUENCY * (3.6)) / time_since_last_call);
     printf("t: %i \n", time_since_last_call);
     printf("v: %f \n", velocity);
 
@@ -546,6 +537,9 @@ void systick_handler(void) {
     volatile struct frame_t direction_frame = get_frame(403, 479, 71, 270);
     //update display
     static volatile bool curdirection;
+
+    // draw analog speed
+    draw_line(calculate_pointer(velocity));
 
     measure_call_cnt_velo = 0;
     if (curdirection != direction) {
@@ -642,7 +636,7 @@ int main(void) {
     SysTickPeriodSet((ticks_per_sec / 10)); // periodic call: 10/s
 
     IntPrioritySet(FAULT_SYSTICK, 5);
-    IntPrioritySet(INT_GPIOP0_TM4C123,4);
+    IntPrioritySet(INT_GPIOP0_TM4C123, 4);
 
     while (1) {
         // IDLE
