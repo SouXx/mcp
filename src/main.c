@@ -42,11 +42,12 @@ static volatile struct frame_t tacho_frame;
 static volatile struct frame_t direction_frame;
 static volatile struct frame_t meter_frame;
 
-volatile uint32_t h_km;
-volatile uint32_t ten_km;
-volatile uint32_t one_km;
-volatile uint32_t h_m;
-volatile uint32_t ten_m;
+static volatile uint32_t h_km;
+static volatile uint32_t ten_km;
+static volatile uint32_t one_km;
+static volatile uint32_t h_m;
+static volatile uint32_t ten_m;
+static volatile uint16_t co_mass;
 
 static struct semaphore_t {
     int counter;
@@ -518,6 +519,8 @@ void systick_handler(void) {
     one_km = ((distance_meter - ten_km * 10000) / 1000) % 10;
     h_m = ((distance_meter - one_km * 1000) / 100) % 10;
     ten_m = ((distance_meter - h_m * 100) / 10) % 10;
+
+    co_mass = (distance_meter/1000)*0.2;
 }
 
 /**
@@ -548,6 +551,7 @@ void timer1_draw_handler(void) {
 
     // mileage output
     if((distance_meter/10)%10 != (distance_meter_old/10)%10){
+        // TODO: CO Output
         write_array(&numbers_symbols[h_km], 94, 10);
         write_array(&numbers_symbols[ten_km], 124, 10);
         write_array(&numbers_symbols[one_km], 154, 10);
@@ -555,7 +559,6 @@ void timer1_draw_handler(void) {
         write_array(&numbers_symbols[ten_m], 204, 10);
         distance_meter_old = distance_meter;
     }
-
 
     if (check) {
         // draw analog speed
