@@ -32,7 +32,7 @@
 static volatile int distance_meter = 0 + OFFSET;
 static volatile int measure_call_cnt_velo = 0;
 volatile uint32_t time_since_last_call = 0;
-volatile double velocity;
+static volatile double *velocity;
 
 static struct semaphore_t {
     int counter;
@@ -516,9 +516,9 @@ void s1_event_handler(void) {
 
     //double tmp = (((double)time_since_last_call) /);
 
-    velocity = (((double) CLOCK_FREQUENCY * (3.6)) / time_since_last_call);
+    *velocity = (((double) CLOCK_FREQUENCY * (3.6)) / time_since_last_call);
     printf("t: %i \n", time_since_last_call);
-    printf("v: %f \n", velocity);
+    printf("v: %f \n", *velocity);
 
 
     if (GPIOPinRead(GPIO_PORTP_BASE, GPIO_INT_PIN_1) == 2) {
@@ -539,7 +539,7 @@ void systick_handler(void) {
     static volatile bool curdirection;
 
     // draw analog speed
-    draw_line(calculate_pointer(velocity));
+    draw_line(calculate_pointer(*velocity));
 
     measure_call_cnt_velo = 0;
     if (curdirection != direction) {
