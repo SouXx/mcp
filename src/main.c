@@ -510,24 +510,21 @@ void s1_event_handler(void) {
     measure_call_cnt_velo++;
     static volatile uint32_t local_velocity;
 
-
     // stop timer, get value, reset and start again
     TimerDisable(TIMER0_BASE, TIMER_A);
     static volatile uint32_t time_since_last_call = HWREG(TIMER0_BASE + TIMER_O_TAV);
     HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
     TimerEnable(TIMER0_BASE, TIMER_A);
-
     local_velocity = (SPEED_FACTOR/ time_since_last_call);
-    printf("t: %i \n", time_since_last_call);
-    printf("v: %f \n", velocity);
-    // draw analog speed
-    draw_line(calculate_pointer(local_velocity));
 
     if (GPIOPinRead(GPIO_PORTP_BASE, GPIO_INT_PIN_1) == 2) {
         direction = FORWARD;
     } else {
         direction = BACKWARD;
     }
+
+    // set global context
+    velocity = local_velocity;
 
     GPIOIntClear(GPIO_PORTP_BASE, GPIO_INT_PIN_0);
     //IntMasterEnable();
@@ -551,6 +548,8 @@ void systick_handler(void) {
         }
 
     }
+    // draw analog speed
+    draw_line(calculate_pointer(local_velocity));
 /*
     volatile struct frame_t meter_frame = get_frame(80, 250, 0, 50);
     volatile uint32_t h_km = ((distance_meter / 100000) % 10);
