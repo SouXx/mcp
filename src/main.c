@@ -26,6 +26,8 @@
 #define FAULT_SYSTICK       15
 #define INT_GPIOP0_TM4C123  123
 
+#define SPEED_FACTOR        ((double) CLOCK_FREQUENCY * (3.6))
+
 //#############################################################################
 // GLOBAL / Typedef
 //#############################################################################
@@ -514,12 +516,11 @@ void s1_event_handler(void) {
     HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
     TimerEnable(TIMER0_BASE, TIMER_A);
 
-    //double tmp = (((double)time_since_last_call) /);
-
-    *velocity = (((double) CLOCK_FREQUENCY * (3.6)) / time_since_last_call);
+    velocity = (SPEED_FACTOR/ time_since_last_call);
     printf("t: %i \n", time_since_last_call);
     printf("v: %f \n", *velocity);
-
+    // draw analog speed
+    draw_line(calculate_pointer(velocity));
 
     if (GPIOPinRead(GPIO_PORTP_BASE, GPIO_INT_PIN_1) == 2) {
         direction = FORWARD;
@@ -537,9 +538,6 @@ void systick_handler(void) {
     volatile struct frame_t direction_frame = get_frame(403, 479, 71, 270);
     //update display
     static volatile bool curdirection;
-
-    // draw analog speed
-    draw_line(calculate_pointer(*velocity));
 
     measure_call_cnt_velo = 0;
     if (curdirection != direction) {
