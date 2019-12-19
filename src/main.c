@@ -570,10 +570,10 @@ void timer1_draw_handler(void) {
     if (curdirection != direction) {
         if (direction == BACKWARD) {
             clear_display(direction_frame);
-            write_array(symbol, 410, 90);
+            write_array(r_symbol, 410, 10);
         } else {
             clear_display(direction_frame);
-            write_array(symbol, 410, 90);
+            write_array(v_symbol, 410, 10);
         }
         curdirection = direction;
     }
@@ -593,10 +593,10 @@ int main(void) {
                                             SYSCTL_CFG_VCO_480), CLOCK_FREQUENCY);
 
     //Init global values
-    meter_frame = get_frame(80, 250, 0, 50);
     whole_frame = get_frame(0, 479, 0, 271);
+    meter_frame = get_frame(80, 250, 0, 50);
     tacho_frame = get_frame(0, 400, 70, 270);
-    direction_frame = get_frame(403, 479, 71, 270);
+    direction_frame = get_frame(420, 479, 0, 70);
     meter_frame = get_frame(80, 250, 0, 50);
 
     //Port Clock Gating Control
