@@ -12,14 +12,14 @@
 
 #define OUTPUT_L            GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4
 #define OUTPUT_M            GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7
-#define INPUT_P                GPIO_PIN_0 | GPIO_PIN_1
+#define INPUT_P             GPIO_PIN_0 | GPIO_PIN_1
 #define DISPLAY_WR          GPIO_PIN_1      // write state
 #define DISPLAY_CS          GPIO_PIN_3      // chip select
 #define DISPLAY_RS          GPIO_PIN_2      // mode select (command/data)
 #define DISPLAY_RST         GPIO_PIN_4
 #define SELECT_AND_WRITE    (DISPLAY_CS | DISPLAY_WR)
-#define BACKGROUND_COLOR    0x00
-#define FRAME_COLOR         0xFF
+#define BACKGROUND_COLOR    0x000000
+#define FRAME_COLOR         0xFFFFFF
 #define OFFSET              5
 #define CLOCK_FREQUENCY     25000000
 
@@ -39,7 +39,6 @@ static volatile double velocity = 0;
 static volatile double old_velocity = 0;
 static volatile struct frame_t meter_frame;
 static volatile struct frame_t whole_frame;
-static volatile struct frame_t tacho_frame;
 static volatile struct frame_t direction_frame;
 static volatile struct frame_t meter_frame;
 
@@ -288,7 +287,7 @@ void window_set(struct frame_t frame) {
  * @param curr_y y coordinate
  * @param color of the pixel
  */
-void draw_pixel(unsigned int curr_x, unsigned int curr_y, unsigned char color) {
+void draw_pixel(unsigned int curr_x, unsigned int curr_y, unsigned int color) {
 
     struct frame_t frame;
     frame.end_y = curr_y;
@@ -299,9 +298,9 @@ void draw_pixel(unsigned int curr_x, unsigned int curr_y, unsigned char color) {
     window_set(frame);
     write_command(0x2C);
     // draw RGB
-    write_data(color);
-    write_data(color);
-    write_data(color);
+    write_data((color&0xff0000)>>16);//rot
+    write_data((color&0x00ff00)>>8); //gr�n
+    write_data((color&0x0000ff)); //blau
 }
 
 /**
@@ -355,7 +354,7 @@ void draw_line(struct frame_t frame) {
  * @param color
  */
 void draw_rectangle(unsigned int delta_x, unsigned int delta_y,
-                    unsigned char color) {
+                    unsigned int color) {
 
     write_command(0x2C);
     unsigned int y = 0;
@@ -388,6 +387,18 @@ void write_array(char symbol_arr[30][30], int x_start, int y_start, int color) {
     }
 }
 
+void write_array_three_signs(char symbol_arr[15][32], int x_start, int y_start, int color) {
+    int x;
+    int y;
+
+    for (y = 0; y <= 15; ++y) {
+        for (x = 0; x <= 32; ++x) {
+            if (symbol_arr[y][x] == 1) {
+                draw_pixel(x_start + x, y_start + y, color);
+            }
+        }
+    }
+}
 /**
  *
  * @param h_scale factor
@@ -446,6 +457,15 @@ void write_frame(void) {
     frame.end_x = 262;
     frame.start_y = 0;
     frame.end_y = 50;
+
+    window_set(frame);
+    draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y),
+                   FRAME_COLOR);
+
+    frame.start_x = 40;
+    frame.end_x = 440;
+    frame.start_y = 269;
+    frame.end_y = 272;
 
     window_set(frame);
     draw_rectangle((frame.end_x - frame.start_x), (frame.end_y - frame.start_y),
@@ -548,7 +568,7 @@ void timer1_watchdog_handler(void) {
     check = 0;
     if (lock == 1) {
         uint32_t velo = old_velocity;
-        for (velo; velo > 0; velo--) {
+        for (velo; velo > 2; velo--) {
             refresh_line(calculate_pointer(velo), calculate_pointer(velo + 1));
         }
         old_velocity = 0;
@@ -562,7 +582,7 @@ void timer1_watchdog_handler(void) {
  */
 void timer1_draw_handler(void) {
 
-    //IntMasterDisable();
+    IntMasterDisable();
     static volatile bool curdirection;
     uint32_t distance_meter_old;
 
@@ -574,16 +594,19 @@ void timer1_draw_handler(void) {
         write_array(&numbers_symbols[h_km_old], 94, 10, BACKGROUND_COLOR);
         write_array(&numbers_symbols[ten_km_old], 124, 10, BACKGROUND_COLOR);
         write_array(&numbers_symbols[one_km_old], 154, 10, BACKGROUND_COLOR);
-        write_array(&numbers_symbols[h_m_old], 184, 10, BACKGROUND_COLOR);
-        write_array(&numbers_symbols[ten_m_old], 214, 10, BACKGROUND_COLOR);
+
+        write_array(&numbers_symbols[h_m_old], 190, 10, BACKGROUND_COLOR);
+        write_array(&numbers_symbols[ten_m_old], 220, 10, BACKGROUND_COLOR);
         write_array(&numbers_symbols[co_mass_old], 325, 10, BACKGROUND_COLOR);
 
         write_array(&numbers_symbols[h_km], 94, 10, FRAME_COLOR);
         write_array(&numbers_symbols[ten_km], 124, 10, FRAME_COLOR);
         write_array(&numbers_symbols[one_km], 154, 10, FRAME_COLOR);
-        write_array(&numbers_symbols[h_m], 184, 10, FRAME_COLOR);
-        write_array(&numbers_symbols[ten_m], 214, 10, FRAME_COLOR);
-        write_array(&numbers_symbols[co_mass], 325, 10, FRAME_COLOR);
+
+        write_array(&numbers_symbols[h_m], 190, 10, FRAME_COLOR);
+        write_array(&numbers_symbols[ten_m], 220, 10, FRAME_COLOR);
+
+        write_array(&numbers_symbols[co_mass], 325, 10, 0xFF0000);
 
         h_km_old = h_km;
         ten_km_old = ten_km;
@@ -602,13 +625,12 @@ void timer1_draw_handler(void) {
         tmp.bg_color = BACKGROUND_COLOR;
         draw_line(tmp);
         if (velocity < (old_velocity + 10) && velocity > (old_velocity - 10)) {
+            if(velocity > 395){
+                velocity = 395;
+            }
             refresh_line(calculate_pointer(velocity),
                          calculate_pointer(old_velocity));
         }
-
-        //if (distance_meter % 3 == 0) {
-        //	velocity = avr_velocity / 3;
-        //	avr_velocity = 0;}
 
     }
     old_velocity = velocity;
@@ -624,7 +646,7 @@ void timer1_draw_handler(void) {
         curdirection = direction;
     }
     TimerIntClear(TIMER1_BASE, TIMER_TIMA_TIMEOUT);
-//IntMasterEnable();
+    IntMasterEnable();
 }
 
 //#############################################################################
@@ -641,7 +663,6 @@ int main(void) {
 //Init global values
     whole_frame = get_frame(0, 479, 0, 271);
     meter_frame = get_frame(80, 250, 0, 45);
-    tacho_frame = get_frame(0, 400, 70, 270);
     direction_frame = get_frame(430, 479, 0, 45);
 
 //Port Clock Gating Control
@@ -680,11 +701,14 @@ int main(void) {
     clear_display(whole_frame);
     write_frame();
 
-    window_set(tacho_frame);
+    //   window_set(tacho_frame);
+
     draw_circle(240, 271, 200);
     draw_circle(240, 271, 199);
     draw_circle(240, 271, 198);
 //write_array(komma_symbol, 180, 10, FRAME_COLOR);
+    write_scaled_arr(1,1,kommatar,184,38);
+
     write_array(k_symbol, 20, 10, FRAME_COLOR);
     write_array(m_symbol, 45, 10, FRAME_COLOR);
     write_array(dp_symbol, 65, 10, FRAME_COLOR);
@@ -696,6 +720,13 @@ int main(void) {
 
     write_array(k_symbol, 350, 10, FRAME_COLOR);
     write_array(g_symbol, 375, 10, FRAME_COLOR);
+
+    write_array_three_signs(null_tacho,8,256,FRAME_COLOR);
+    write_array_three_signs(einhundert,65,120,FRAME_COLOR);
+    write_array_three_signs(zweihundert,224,56,FRAME_COLOR);
+    write_array_three_signs(dreihundert,383,120,FRAME_COLOR);
+    write_array_three_signs(vierhundert,442,256,0xFF0000);
+
     IntMasterEnable();
 
 //SysTick Config
