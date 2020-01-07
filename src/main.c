@@ -3,6 +3,8 @@
 #include <math.h>
 #include "symbols.h"
 #include "mpp1.h"
+#include "driverlib/timer.h"
+#include "inc/hw_timer.h"
 
 //#############################################################################
 // Defines
@@ -25,7 +27,7 @@
 #define INT_GPIOP0_TM4C123  123
 #define INT_TIMER1A_TM4C123 37          // 16/32-Bit Timer 1A
 
-#define SPEED_FACTOR        ((double) CLOCK_FREQUENCY * (3.6))
+#define SPEED_FACTOR        ((double) CLOCK_FREQUENCY * (3.6) - 2500000.0)
 
 //#############################################################################
 // GLOBAL / Typedefs
@@ -35,7 +37,6 @@ static volatile int distance_meter = 0 + OFFSET;
 static volatile int measure_call_cnt_velo = 0;
 static volatile double velocity = 0;
 static volatile double old_velocity = 0;
-static volatile bool check;
 static volatile struct frame_t meter_frame;
 static volatile struct frame_t whole_frame;
 static volatile struct frame_t tacho_frame;
@@ -47,7 +48,8 @@ static volatile uint32_t ten_km;
 static volatile uint32_t one_km;
 static volatile uint32_t h_m;
 static volatile uint32_t ten_m;
-static volatile uint16_t co_mass;
+static volatile int co_mass;
+static volatile int co_mass_old;
 
 static volatile uint32_t h_km_old = 0;
 static volatile uint32_t ten_km_old = 0;
@@ -55,9 +57,11 @@ static volatile uint32_t one_km_old = 0;
 static volatile uint32_t h_m_old = 0;
 static volatile uint32_t ten_m_old = 0;
 
-static struct semaphore_t {
-    int counter;
-} semaphore;
+static volatile uint32_t avr_velocity;
+static volatile uint8_t check = 0;
+static volatile uint8_t lock = 0;
+
+static volatile uint32_t old_time_since_last_call = 0;
 
 struct frame_t {
     unsigned int start_x;
@@ -253,11 +257,6 @@ void clear_display(struct frame_t frame) {
 
 }
 
-void clear_part(struct frame_t frame, void (*pf_draw)(void)){
-    window_set(frame);
-    pf_draw();
-}
-
 //#############################################################################
 // Drawing functions
 //#############################################################################
@@ -316,6 +315,7 @@ void refresh_line(struct frame_t frame, struct frame_t old_frame) {
 
     draw_line(old_frame);
     draw_line(frame);
+
 }
 
 /**
@@ -501,22 +501,24 @@ void draw_circle(int x0, int y0, int radius) {
  */
 void s1_event_handler(void) {
 
-    check = true;
+    check = 1;
     distance_meter++;
-    measure_call_cnt_velo++;
 
     // Read TimerValue
     TimerDisable(TIMER0_BASE, TIMER_A);
     volatile uint32_t time_since_last_call = HWREG(TIMER0_BASE + TIMER_O_TAV);
     HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
     TimerEnable(TIMER0_BASE, TIMER_A);
-    velocity = ((SPEED_FACTOR - 2500000.0) / time_since_last_call);
-
     if (GPIOPinRead(GPIO_PORTP_BASE, GPIO_INT_PIN_1) == 2) {
         direction = FORWARD;
     } else {
         direction = BACKWARD;
     }
+    if (time_since_last_call > (old_time_since_last_call* 0.9) && time_since_last_call < (old_time_since_last_call* 1.1))
+        velocity = ((SPEED_FACTOR) / time_since_last_call);
+
+    old_time_since_last_call = time_since_last_call;
+    lock = 1;
     GPIOIntClear(GPIO_PORTP_BASE, GPIO_INT_PIN_0);
 }
 /**
@@ -531,23 +533,27 @@ void systick_handler(void) {
     h_m = ((distance_meter - one_km * 1000) / 100) % 10;
     ten_m = ((distance_meter - h_m * 100) / 10) % 10;
 
-    co_mass = (distance_meter/1000)*0.2;
+    if (distance_meter > 10000) {
+        co_mass = (distance_meter / 1000) * 0.15;
+    }
+
 }
 
 /**
- * watchdog, catches velocity zero
+ * watchdog, catches velocity at zero
  * task: bring needle down to zero
  */
 void timer1_watchdog_handler(void) {
 
-    check = false;
-    uint16_t velo = old_velocity;
-
-    for(velo; velo == 0; --velo){
-        refresh_line(calculate_pointer(velo), calculate_pointer(velo+1));
+    check = 0;
+    if (lock == 1) {
+        uint32_t velo = old_velocity;
+        for (velo; velo > 0; velo--) {
+            refresh_line(calculate_pointer(velo), calculate_pointer(velo + 1));
+        }
+        old_velocity = 0;
     }
-
-    old_velocity = 0;
+    lock = 0;
     TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
 }
 
@@ -556,12 +562,12 @@ void timer1_watchdog_handler(void) {
  */
 void timer1_draw_handler(void) {
 
-    IntMasterDisable();
+    //IntMasterDisable();
     static volatile bool curdirection;
     uint32_t distance_meter_old;
 
     // mileage output
-    if((distance_meter/10)%10 != (distance_meter_old/10)%10){
+    if ((distance_meter / 10) % 10 != (distance_meter_old / 10) % 10) {
         // TODO: CO Output
         //clear_display(meter_frame);
 
@@ -570,29 +576,42 @@ void timer1_draw_handler(void) {
         write_array(&numbers_symbols[one_km_old], 154, 10, BACKGROUND_COLOR);
         write_array(&numbers_symbols[h_m_old], 184, 10, BACKGROUND_COLOR);
         write_array(&numbers_symbols[ten_m_old], 214, 10, BACKGROUND_COLOR);
+        write_array(&numbers_symbols[co_mass_old], 325, 10, BACKGROUND_COLOR);
 
         write_array(&numbers_symbols[h_km], 94, 10, FRAME_COLOR);
         write_array(&numbers_symbols[ten_km], 124, 10, FRAME_COLOR);
         write_array(&numbers_symbols[one_km], 154, 10, FRAME_COLOR);
         write_array(&numbers_symbols[h_m], 184, 10, FRAME_COLOR);
         write_array(&numbers_symbols[ten_m], 214, 10, FRAME_COLOR);
+        write_array(&numbers_symbols[co_mass], 325, 10, FRAME_COLOR);
 
         h_km_old = h_km;
         ten_km_old = ten_km;
         one_km_old = one_km;
         h_m_old = h_m;
         ten_m_old = ten_m;
+        co_mass_old = co_mass;
 
         distance_meter_old = distance_meter;
     }
 
-
-    if (check) {
+    if (check == 1) {
         // draw analog speed
-        refresh_line(calculate_pointer(velocity),
-                     calculate_pointer(old_velocity));
-        old_velocity = velocity;
+        // check if speed is plausible
+        struct frame_t tmp = calculate_pointer(old_velocity);
+        tmp.bg_color = BACKGROUND_COLOR;
+        draw_line(tmp);
+        if (velocity < (old_velocity + 10) && velocity > (old_velocity - 10)) {
+            refresh_line(calculate_pointer(velocity),
+                         calculate_pointer(old_velocity));
+        }
+
+        //if (distance_meter % 3 == 0) {
+        //	velocity = avr_velocity / 3;
+        //	avr_velocity = 0;}
+
     }
+    old_velocity = velocity;
 
     if (curdirection != direction) {
         if (direction == BACKWARD) {
@@ -605,7 +624,7 @@ void timer1_draw_handler(void) {
         curdirection = direction;
     }
     TimerIntClear(TIMER1_BASE, TIMER_TIMA_TIMEOUT);
-    IntMasterEnable();
+//IntMasterEnable();
 }
 
 //#############################################################################
@@ -619,42 +638,41 @@ int main(void) {
                                             SYSCTL_USE_PLL |
                                             SYSCTL_CFG_VCO_480), CLOCK_FREQUENCY);
 
-    //Init global values
+//Init global values
     whole_frame = get_frame(0, 479, 0, 271);
     meter_frame = get_frame(80, 250, 0, 45);
     tacho_frame = get_frame(0, 400, 70, 270);
-    direction_frame = get_frame(430, 479, 0,45);
+    direction_frame = get_frame(430, 479, 0, 45);
 
-
-    //Port Clock Gating Control
+//Port Clock Gating Control
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOM);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOL);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOP);
-    //Timer
+//Timer
     SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER1);
 
-    //Timer0
+//Timer0
     TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC_UP); // 32bit period up mode
     HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
-    HWREG(TIMER0_BASE + TIMER_O_TAILR) = CLOCK_FREQUENCY; // 1sec
+    HWREG(TIMER0_BASE + TIMER_O_TAILR) = CLOCK_FREQUENCY / 4; // 0.25sec
     TimerIntRegister(TIMER0_BASE, TIMER_A, timer1_watchdog_handler);
     TimerIntEnable(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
 
-    //Timer1
+//Timer1
     TimerConfigure(TIMER1_BASE, TIMER_CFG_PERIODIC); // 32bit periodic down mode
     HWREG(TIMER1_BASE + TIMER_O_TAILR) = 5000000;
     TimerIntRegister(TIMER1_BASE, TIMER_A, timer1_draw_handler);
     TimerIntEnable(TIMER1_BASE, TIMER_TIMA_TIMEOUT);
 
-    //Set Direction
+//Set Direction
     GPIOPinTypeGPIOOutput(GPIO_PORTL_BASE, (OUTPUT_L | GPIO_PIN_5));
     GPIOPinTypeGPIOOutput(GPIO_PORTM_BASE, OUTPUT_M);
     GPIOPinTypeGPIOInput(GPIO_PORTP_BASE, INPUT_P);
 
     initialise_ssd1963();
 
-    //Int Init
+//Int Init
     GPIOIntRegister(GPIO_PORTP_BASE, s1_event_handler);
     GPIOIntTypeSet(GPIO_PORTP_BASE, GPIO_INT_PIN_0, GPIO_RISING_EDGE);
     GPIOIntEnable(GPIO_PORTP_BASE, GPIO_INT_PIN_0);
@@ -666,24 +684,30 @@ int main(void) {
     draw_circle(240, 271, 200);
     draw_circle(240, 271, 199);
     draw_circle(240, 271, 198);
-
-    //write_array(k_symbol, 10, 10);
-    //write_array(m_symbol, 47, 10);
-    //write_array(dp_symbol, 64, 10);
+//write_array(komma_symbol, 180, 10, FRAME_COLOR);
+    write_array(k_symbol, 20, 10, FRAME_COLOR);
+    write_array(m_symbol, 45, 10, FRAME_COLOR);
+    write_array(dp_symbol, 65, 10, FRAME_COLOR);
     write_array(v_symbol, 430, 10, FRAME_COLOR);
 
+    write_array(c_symbol, 265, 10, FRAME_COLOR);
+    write_array(o_symbol, 290, 10, FRAME_COLOR);
+    write_array(dp_symbol, 305, 10, FRAME_COLOR);
+
+    write_array(k_symbol, 350, 10, FRAME_COLOR);
+    write_array(g_symbol, 375, 10, FRAME_COLOR);
     IntMasterEnable();
 
-    //SysTick Config
+//SysTick Config
     SysTickIntEnable();
     SysTickEnable();
     SysTickIntRegister(systick_handler);
     SysTickPeriodSet((ticks_per_sec / 10)); // periodic call: 10/s
-    //Set Priorities
-    IntPrioritySet(FAULT_SYSTICK, 5);
+//Set Priorities
+    IntPrioritySet(FAULT_SYSTICK, 6);
     IntPrioritySet(INT_GPIOP0_TM4C123, 4);
     IntPrioritySet(INT_TIMER1A_TM4C123, 5);
-    //Start Timer
+//Start Timer
     TimerEnable(TIMER0_BASE, TIMER_A);
     TimerEnable(TIMER1_BASE, TIMER_A);
 
