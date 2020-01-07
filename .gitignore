@@ -1,0 +1,4 @@
+/CMakeLists.txt
+/.idea/*
+/tiva/*
+/cmake-build-debug/*
