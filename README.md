@@ -1,4 +1,5 @@
 # mcp
+This was made in the Lecture "Microprozessortechnik" at HAW Hamburg(IuE). 
 Event driven digital tachometer, using SSD1963 controlled by a TI4C1294XL.
 ## External Dependencies
 [Tivaware](http://software-dl.ti.com/tiva-c/SW-TM4C/latest/index_FDS.html)
